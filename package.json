@@ -1,0 +1,45 @@
+{
+  "name": "cnmechanic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.9.8",
+  "engines": {
+    "node": ">=22.12.0 <27"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @cnmechanic/web",
+    "dev:worker": "npm run dev -w @cnmechanic/worker",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:db": "vitest run tests/database.test.ts",
+    "test:e2e": "playwright test",
+    "build": "npm run build:web && npm run build:worker",
+    "build:web": "npm run build -w @cnmechanic/web",
+    "build:worker": "npm run build -w @cnmechanic/worker",
+    "worker:types": "wrangler types apps/worker/src/worker-configuration.d.ts --config apps/worker/wrangler.jsonc --include-runtime false",
+    "worker:types:check": "wrangler types apps/worker/src/worker-configuration.d.ts --config apps/worker/wrangler.jsonc --include-runtime false --check",
+    "openapi": "node --import tsx scripts/openapi.ts",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "26.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.11.0",
+    "@eslint/js": "10.0.1",
+    "typescript-eslint": "8.70.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "vitest": "5.0.1",
+    "tsx": "4.23.13",
+    "@playwright/test": "1.63.0",
+    "@electric-sql/pglite": "0.5.8",
+    "wrangler": "4.135.0"
+  }
+}

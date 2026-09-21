@@ -1,452 +1,74 @@
 # CNMechanic
 
-**Modern Automotive Service. Built on Trust. Designed to Scale.**
+CNMechanic is building a trusted mechanic network. This repository currently contains Phase 1: the secure Cloudflare and Supabase foundation. Discovery, booking, repair, payments, reviews and vehicle records are deliberately out of scope.
 
-CNMechanic is a modern automotive service platform built to transform an independent mechanic business into a scalable automotive brand.
+## Architecture
 
-The business begins with professional vehicle repair and maintenance, with a strong specialization in **European vehicles**, while continuing to service other makes and models.
+```text
+Cloudflare Pages (React, TypeScript, Vite)
+  -> Cloudflare Worker API (/api/v1)
+  -> Supabase Auth + PostgreSQL protected by RLS
 
-The long-term goal is bigger than building a website for one mechanic shop.
+WebMCP adapter -> typed API client -> Worker -> shared domain services
+Remote MCP is planned at api.cnmechanic.com/mcp; it is not implemented.
+```
 
-CNMechanic is being developed as a digital-first automotive service platform that can expand into additional mechanics, service locations, mobile services, vehicle diagnostics, maintenance management, and other automotive services.
+The canonical production web origin is `https://www.cnmechanic.com`; the planned API origin is `https://api.cnmechanic.com`.
 
----
+## Layout
 
-## 🚗 Our Mission
+```text
+apps/web       Pages frontend
+apps/worker    Worker API
+packages/config      validated public configuration and canonical URLs
+packages/schemas     shared runtime API contracts
+packages/domain      framework-independent authorization/domain services
+packages/api-client  typed Worker client
+packages/webmcp      isolated browser-agent registry and adapter
+supabase             local configuration, migration, RLS tests
+tests                application, contract and embedded PostgreSQL tests
+```
 
-Finding a skilled and trustworthy mechanic should not be difficult.
+## Prerequisites
 
-CNMechanic is built around three principles:
+Node 22.12–26 and npm 10.9.8 are required. The Supabase CLI is required for the full Docker-backed database test. Docker is required only for the local Supabase stack and pgTAP integration test.
 
-**Trust. Transparency. Quality workmanship.**
+## Install and run
 
-Our mission is to combine experienced automotive professionals with modern technology to create a better way for vehicle owners to find, understand, schedule, and manage automotive services.
+```bash
+npm ci
+cp apps/web/.env.example apps/web/.env.local
+cp apps/worker/.dev.vars.example apps/worker/.dev.vars
+npm run dev:worker
+npm run dev:web
+```
 
-Technology supports the mechanic — it does not replace the mechanic.
+The frontend is served at `http://127.0.0.1:5173` and the Worker at `http://127.0.0.1:8787`. Without local Supabase values, the public foundation remains usable but sign-in is intentionally unavailable.
 
----
+To enable local authentication, start Supabase, obtain its local URL and anonymous key from `supabase status`, and set the matching public values in both local environment files. Never place a service-role key in either file.
 
-## 🔧 What CNMechanic Does
+```bash
+supabase start
+supabase db reset --local --no-seed
+supabase test db supabase/tests --local
+```
 
-CNMechanic provides automotive maintenance, diagnostics, and repair services.
+## Verification
 
-The initial focus includes:
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+git diff --check
+```
 
-* European vehicle specialists
-* BMW
-* Mercedes-Benz
-* Audi
-* Volkswagen
-* Volvo
-* Porsche
-* Land Rover / Range Rover
-* MINI
-* Other European brands
-* Asian and American vehicles
-* Engine diagnostics
-* Check-engine-light diagnostics
-* Electrical diagnostics
-* Brake service
-* Suspension and steering
-* Cooling systems
-* Oil and preventative maintenance
-* Battery and charging systems
-* Engine repair
-* Vehicle inspections
-* General automotive repair
+`npm test` includes real PostgreSQL-compatible PGlite migration/RLS tests. The Docker-backed Supabase reset and pgTAP suite remain the integration check and run in CI.
 
-Service availability will expand as the CNMechanic network grows.
+## Deploying
 
----
+No deployment is configured or performed by this repository. See [Deployment](docs/DEPLOYMENT.md) for the required manual environment, secret and domain steps. CI validates builds only.
 
-# 🌎 Built Beyond One Location
+## WebMCP status
 
-CNMechanic begins with an experienced mechanic serving the Providence, Rhode Island market, but the software architecture and brand are being built for expansion.
-
-The platform should never be architected as simply:
-
-> “A local mechanic website.”
-
-Instead, CNMechanic should be capable of evolving into:
-
-**CNMechanic → Automotive Service Platform → Multi-Location Network**
-
-Future expansion may include:
-
-* Additional CNMechanic locations
-* Independent mechanic partnerships
-* Verified mechanic network
-* Mobile mechanics
-* Service-area expansion
-* Fleet maintenance
-* Roadside assistance integrations
-* Vehicle maintenance histories
-* Customer vehicle profiles
-* Parts and service estimates
-* Mechanic dashboards
-* Multi-shop management
-* Automotive service marketplace
-
-The first location proves the model. The technology should support everything that comes afterward.
-
----
-
-# 🏗 Technology Architecture
-
-CNMechanic is a **fully owned, custom-built application**.
-
-It should not depend on WordPress, Wix, Squarespace, Shopify, or another website-builder platform.
-
-### Frontend
-
-* React / Next.js
-* TypeScript
-* Responsive mobile-first interface
-* Accessible UI
-* Progressive enhancement
-* Search-engine optimized architecture
-
-### Infrastructure
-
-**Cloudflare Pages**
-
-Hosts and distributes the frontend through Cloudflare's global network.
-
-**Cloudflare Workers**
-
-Handles backend/API functionality, including:
-
-* API endpoints
-* Form processing
-* Appointment requests
-* Authentication middleware
-* WebMCP endpoints
-* Security controls
-* Rate limiting
-* External integrations
-
-### Data Layer
-
-**Supabase**
-
-Used for:
-
-* PostgreSQL database
-* Authentication
-* Customer accounts
-* Vehicle records
-* Service requests
-* Appointments
-* Mechanic profiles
-* Service locations
-* Reviews
-* Administrative data
-* Row Level Security
-
-Sensitive credentials must never be exposed to the browser.
-
----
-
-# 🤖 WebMCP & Agent-Ready Architecture
-
-CNMechanic is designed to support the emerging agentic web.
-
-WebMCP should be implemented as a first-class part of the architecture rather than added later as an experiment.
-
-The objective is to make CNMechanic information understandable not only to traditional search engines but also to authorized AI agents and assistants.
-
-Agent-accessible capabilities may eventually include:
-
-* Discover services
-* Find supported vehicle makes
-* Search service locations
-* Check business information
-* Retrieve service descriptions
-* Request appointments
-* Retrieve public pricing information
-* Find mechanics by specialization
-* Search automotive knowledge
-* Navigate location/service relationships
-
-Any action that changes data, books services, accesses customer information, or performs another consequential operation must have appropriate authorization and validation.
-
-WebMCP must never bypass normal application security.
-
----
-
-# 🔎 SEO & Search Architecture
-
-Organic discovery is a core product requirement.
-
-SEO must be engineered into CNMechanic from the beginning.
-
-The application should support:
-
-* Server-renderable/indexable content where appropriate
-* Semantic HTML
-* Canonical URLs
-* XML sitemap
-* Robots directives
-* Open Graph metadata
-* Social metadata
-* Structured data / JSON-LD
-* Local business information
-* Automotive service structured content
-* Breadcrumbs
-* Service pages
-* Vehicle-make pages
-* Location pages
-* Internal linking
-* Fast Core Web Vitals
-* Image optimization
-* Accessible image descriptions
-
-The content architecture should allow combinations such as:
-
-`/services/brake-repair`
-
-`/services/engine-diagnostics`
-
-`/vehicles/bmw`
-
-`/vehicles/mercedes-benz`
-
-`/vehicles/volvo`
-
-`/locations/providence-ri`
-
-As CNMechanic expands, the architecture should support relationships such as:
-
-`Location × Service × Vehicle Make`
-
-without generating low-quality or duplicate doorway pages.
-
-The goal is useful, authoritative automotive content—not mass-generated SEO spam.
-
----
-
-# 📍 Local Search
-
-The first market is the **Providence, Rhode Island area**.
-
-The initial implementation should establish strong local search signals while preserving the ability to add additional markets later.
-
-Location data should therefore be database-driven rather than hard-coded throughout the application.
-
-Each future location can have:
-
-* Address
-* Phone number
-* Hours
-* Service radius
-* Services offered
-* Vehicle specialties
-* Mechanics
-* Reviews
-* Appointment availability
-* Location-specific content
-
----
-
-# 👤 Customer Experience
-
-Customers should eventually be able to create an account and maintain their vehicles.
-
-A customer garage may contain:
-
-* Year
-* Make
-* Model
-* Trim
-* Mileage
-* VIN where appropriate
-* Service history
-* Previous repairs
-* Recommended maintenance
-* Appointment history
-
-This creates a continuing relationship between CNMechanic and the vehicle owner rather than treating every repair as an isolated transaction.
-
----
-
-# 📅 Service & Appointment System
-
-Customers should be able to request service through CNMechanic.
-
-Typical flow:
-
-**Choose Vehicle → Select Problem/Service → Describe Symptoms → Choose Location → Request Date → Submit**
-
-The mechanic or shop can then:
-
-* Review request
-* Contact customer
-* Accept
-* Reschedule
-* Reject
-* Add internal notes
-* Update service status
-
-The system should not automatically promise diagnostic conclusions or final repair prices before a qualified mechanic evaluates the vehicle.
-
----
-
-# 🛠 Administration
-
-CNMechanic requires a secure administrative dashboard.
-
-Authorized staff should be able to manage:
-
-* Services
-* Vehicle makes
-* Locations
-* Mechanics
-* Appointment requests
-* Customers
-* Business hours
-* Service areas
-* Reviews/testimonials
-* Website content
-* SEO metadata
-* Photos
-* Leads
-* Contact submissions
-
-The objective is to allow the business to operate the platform without developers having to modify source code for ordinary business changes.
-
----
-
-# 🧠 Responsible Use of AI
-
-CNMechanic is **not an AI mechanic**.
-
-AI may assist with:
-
-* Search
-* Content organization
-* Administrative workflows
-* Customer-service assistance
-* SEO analysis
-* Vehicle information retrieval
-* Explaining common automotive terminology
-
-AI must not replace professional diagnosis or represent uncertain information as a confirmed mechanical diagnosis.
-
-Actual automotive diagnosis and repair decisions remain with qualified mechanics.
-
----
-
-# 🔐 Security
-
-Security must be designed into the platform from the beginning.
-
-Requirements include:
-
-* Supabase Row Level Security
-* Server-side authorization
-* Input validation
-* API rate limiting
-* Secure session handling
-* Environment-based secrets
-* CSRF protections where applicable
-* XSS protections
-* SQL injection protection
-* Restricted administrative endpoints
-* Audit logging for sensitive operations
-* Least-privilege database permissions
-
-No Supabase service-role key or privileged credential may be shipped to the client.
-
----
-
-# 📈 Long-Term Vision
-
-CNMechanic can eventually become infrastructure connecting:
-
-**Drivers → Vehicles → Mechanics → Shops → Service History**
-
-Possible future products include:
-
-### CNMechanic Shops
-
-Multi-location branded automotive service centers.
-
-### CNMechanic Network
-
-A network of vetted independent mechanics.
-
-### CNMechanic Mobile
-
-Mechanics who perform eligible services at customers' homes or workplaces.
-
-### CNMechanic Garage
-
-Digital vehicle ownership and maintenance records.
-
-### CNMechanic Fleet
-
-Maintenance management for commercial fleets.
-
-### CNMechanic Marketplace
-
-Discovery and booking across mechanics, shops, specialties, and locations.
-
-These are future directions rather than commitments for the initial release.
-
----
-
-# 🚀 Development Principles
-
-Every implementation decision should follow these principles:
-
-1. **Trust first**
-2. **Human mechanic expertise first**
-3. **Mobile first**
-4. **SEO from day one**
-5. **Agent-ready from day one**
-6. **Security by default**
-7. **No unnecessary AI dependency**
-8. **No unnecessary third-party platform dependency**
-9. **Build for multiple locations**
-10. **Build for scale without overengineering the MVP**
-
----
-
-# 🗺 Initial Roadmap
-
-### Phase 1 — Foundation
-
-Brand identity, production website, services, vehicle specialties, Providence market pages, contact system, service requests, SEO foundation, structured data, Cloudflare deployment, Supabase backend, WebMCP foundation, and administration.
-
-### Phase 2 — Customer Platform
-
-Customer accounts, vehicle garage, service history, improved appointment management, mechanic workflow, notifications, reviews, and customer dashboard.
-
-### Phase 3 — Multi-Location
-
-Location management, mechanic profiles, service territories, location-specific availability, centralized administration, and scalable search architecture.
-
-### Phase 4 — CNMechanic Network
-
-Independent mechanic onboarding, verification, mechanic dashboards, customer/mechanic matching, expanded booking infrastructure, and additional markets.
-
----
-
-# 🏁 Current Status
-
-**Status:** Early Development
-**Initial Market:** Providence, Rhode Island, USA
-**Primary Specialty:** European Vehicles
-**Business Model:** Automotive Service + Scalable Service Platform
-**Infrastructure:** Cloudflare + Supabase
-**Frontend:** React / Next.js + TypeScript
-**Backend:** Cloudflare Workers
-**Agent Layer:** WebMCP
-
----
-
-## CNMechanic
-
-**European expertise. Honest service. Built to go further.**
-
-© Tarvico Inc. All rights reserved.
+`get_platform_info` is the sole registered browser-agent proof tool: a public, read-only call to the Worker version endpoint. It uses feature detection and harmlessly skips unsupported browsers. Remote MCP, account-scoped tools and all transactional tools are future work.
