@@ -13,7 +13,7 @@ beforeAll(async()=>{
  grant usage on schema auth,public to anon,authenticated,service_role;
  grant execute on function auth.uid() to anon,authenticated,service_role;`);
  for(const file of readdirSync('supabase/migrations').sort())await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8'));
- await db.exec(`insert into auth.users values ('${a}'),('${b}'); insert into public.organizations(id,name) values ('${orgA}','A'),('${orgB}','B');insert into public.organization_memberships(organization_id,user_id,role) values ('${orgA}','${a}','SHOP_OWNER'),('${orgA}','${a}','TECHNICIAN'),('${orgB}','${b}','SHOP_OWNER');`);
+ await db.exec(`insert into auth.users values ('${a}'),('${b}'); insert into public.organizations(id,name,legal_name,slug) values ('${orgA}','A','A LLC','a'),('${orgB}','B','B LLC','b');insert into public.organization_memberships(organization_id,user_id,role) values ('${orgA}','${a}','SHOP_OWNER'),('${orgA}','${a}','TECHNICIAN'),('${orgB}','${b}','SHOP_OWNER');`);
 },30000);
 afterAll(async()=>{await db.close();});
 async function asUser<T>(id:string,work:()=>Promise<T>){await db.exec(`set role authenticated;set request.jwt.claim.sub='${id}';`);try{return await work();}finally{await db.exec('reset role;reset request.jwt.claim.sub;');}}
@@ -28,5 +28,6 @@ describe('migration replay and PostgreSQL RLS',()=>{
  it('supports multiple roles and isolates organizations and memberships',async()=>{await asUser(a,async()=>{expect((await db.query('select id from public.organizations')).rows).toEqual([{id:orgA}]);expect((await db.query('select * from public.organization_memberships')).rows).toHaveLength(2);});await asUser(b,async()=>{expect((await db.query('select id from public.organizations')).rows).toEqual([{id:orgB}]);});});
  it('revocation takes effect on the next query',async()=>{await db.query('update public.organization_memberships set active=false where user_id=$1',[b]);await asUser(b,async()=>{expect((await db.query('select * from public.organizations')).rows).toEqual([]);});});
  it('does not expose private provisioning function',async()=>{await asUser(a,async()=>{await expect(db.exec('select private.create_profile()')).rejects.toThrow(/permission denied/);});});
+ it('installs vehicle privacy policies and current-owner integrity',async()=>{const policies=await db.query<{policyname:string}>("select policyname from pg_policies where schemaname='public' and tablename in ('vehicles','vehicle_ownerships','service_requests')");expect(policies.rows.map(row=>row.policyname)).toEqual(expect.arrayContaining(['vehicles_read_authorized','ownerships_read_self_or_admin','service_requests_create_owner']));const indexes=await db.query<{indexname:string}>("select indexname from pg_indexes where schemaname='public' and tablename='vehicle_ownerships'");expect(indexes.rows.map(row=>row.indexname)).toContain('vehicle_ownerships_one_current_owner_idx');});
  it('enables RLS on every created public table',async()=>{expect((await db.query("select relname from pg_class join pg_namespace n on n.oid=relnamespace where n.nspname='public' and relkind='r' and not relrowsecurity")).rows).toEqual([]);});
 });

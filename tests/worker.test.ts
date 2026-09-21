@@ -1,7 +1,7 @@
 import { beforeEach,afterEach,describe,it,expect,vi } from 'vitest';
 import worker from '../apps/worker/src/index';
 import { createApiClient,ApiError } from '@cnmechanic/api-client';
-import { healthSchema,versionSchema,envelope,profileSchema } from '@cnmechanic/schemas';
+import { healthSchema,versionSchema,envelope,profileSchema,contracts } from '@cnmechanic/schemas';
 import { authorize } from '../apps/worker/src/authorization';
 const env={ENVIRONMENT:'local',ALLOWED_ORIGINS:'http://127.0.0.1:5173',SUPABASE_URL:'http://127.0.0.1:54321',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test_fixture'} as unknown as Env;
 const id='10000000-0000-4000-8000-000000000001';
@@ -23,7 +23,7 @@ describe('Worker request pipeline',()=>{
  it('fails closed on malformed or incomplete hosted configuration',async()=>{const response=await worker.fetch(req('/api/v1/health'),{ENVIRONMENT:'production',ALLOWED_ORIGINS:'*',password:'never-leak'} as unknown as Env);expect(response.status).toBe(503);expect(JSON.stringify(await response.json())).not.toContain('never-leak');});
  it('returns no membership data to a nonmember',async()=>{backend();expect((await worker.fetch(req(`/api/v1/organizations/${id}`,{headers:auth}),env)).status).toBe(403);});
  it('has capability policies separate from authentication',()=>{expect(()=>authorize(['TECHNICIAN'],'organization:manage')).toThrow();expect(()=>authorize(['SHOP_OWNER'],'organization:manage')).not.toThrow();expect(()=>authorize([],'organization:read')).toThrow();});
- it('generates OpenAPI from the actual shared contracts',async()=>{const result=await worker.fetch(req('/openapi.json'),env);const spec=await result.json() as {paths:Record<string,unknown>};expect(Object.keys(spec.paths)).toEqual(['/api/v1/health','/api/v1/version','/api/v1/me','/api/v1/organizations/{id}']);});
+ it('generates OpenAPI from the actual shared contracts',async()=>{const result=await worker.fetch(req('/openapi.json'),env);const spec=await result.json() as {paths:Record<string,unknown>};expect(Object.keys(spec.paths)).toEqual([...new Set(Object.values(contracts).map(c=>c.path))]);});
  it('typed client communicates with the Worker',async()=>{const client=createApiClient({baseUrl:'http://127.0.0.1:8787',fetch:(input,init)=>worker.fetch(new Request(input,init),env)});expect((await client.health()).status).toBe('ok');await expect(client.me()).rejects.toMatchObject({code:'AUTHENTICATION_REQUIRED',status:401});});
  it('typed client rejects invalid responses and times out',async()=>{const broken=createApiClient({baseUrl:'http://api.invalid',fetch:async()=>Response.json({data:{bad:true},requestId:crypto.randomUUID()})});await expect(broken.health()).rejects.toBeInstanceOf(ApiError);const slow=createApiClient({baseUrl:'http://api.invalid',timeoutMs:10,fetch:(_input,init)=>new Promise((_resolve,reject)=>{init?.signal?.addEventListener('abort',()=>reject(new Error('aborted')));})});await expect(slow.health()).rejects.toMatchObject({code:'REQUEST_ABORTED'});});
 });

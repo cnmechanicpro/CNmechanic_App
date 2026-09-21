@@ -13,3 +13,8 @@ export class IdentityService {
  getProfile(){return this.repository.getProfile();}
  updateProfile(displayName:string){return this.repository.updateProfile(displayName);}
 }
+/** Domain boundary for the stable vehicle/ownership aggregate. Database RLS remains authoritative. */
+export interface VehicleRepository<TVehicle,TCreate>{list():Promise<TVehicle[]>;get(id:string):Promise<TVehicle>;create(input:TCreate):Promise<TVehicle>;}
+export class VehicleService<TVehicle,TCreate>{constructor(private readonly repository:VehicleRepository<TVehicle,TCreate>){}list(){return this.repository.list();}get(id:string){return this.repository.get(id);}create(input:TCreate){return this.repository.create(input);}}
+export interface ServiceRequestRepository<TRequest,TCreate>{create(input:TCreate):Promise<TRequest>;}
+export class ServiceRequestService<TRequest,TCreate>{constructor(private readonly repository:ServiceRequestRepository<TRequest,TCreate>){}create(input:TCreate){return this.repository.create(input);}}
