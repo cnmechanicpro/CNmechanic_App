@@ -1,0 +1,21 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(9);
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000001'),('10000000-0000-4000-8000-000000000002');
+select is((select count(*)::integer from public.profiles),2,'profile trigger provisions users');
+set local role authenticated;
+set local request.jwt.claim.sub='10000000-0000-4000-8000-000000000001';
+select is((select count(*)::integer from public.profiles),1,'A sees one profile');
+select is((select count(*)::integer from public.profiles where id='10000000-0000-4000-8000-000000000002'),0,'A cannot read B');
+with changed as (update public.profiles set display_name='attack' where id='10000000-0000-4000-8000-000000000002' returning id)
+select is((select count(*)::integer from changed),0,'A cannot update B');
+select lives_ok($$update public.profiles set display_name='A' where id='10000000-0000-4000-8000-000000000001'$$,'A updates own name');
+select throws_ok($$update public.profiles set id='10000000-0000-4000-8000-000000000002'$$,'42501',null,'Cannot reassign ownership');
+select throws_ok($$insert into public.organizations(name) values ('attack')$$,'42501',null,'Cannot provision organization');
+reset role;
+set local role anon;
+select throws_ok($$select * from public.profiles$$,'42501',null,'Anonymous read denied');
+select throws_ok($$update public.profiles set display_name='attack'$$,'42501',null,'Anonymous write denied');
+reset role;
+select * from finish();
+rollback;

@@ -1,0 +1,17 @@
+{
+  "name": "@cnmechanic/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 127.0.0.1",
+    "build": "wrangler deploy --dry-run --env=\"\" --outdir dist",
+    "types": "wrangler types --include-runtime false"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.116.0",
+    "@cnmechanic/schemas": "0.1.0",
+    "@cnmechanic/config": "0.1.0",
+    "@cnmechanic/domain": "0.1.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@cnmechanic/webmcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@cnmechanic/schemas": "0.1.0",
+    "@cnmechanic/api-client": "0.1.0",
+    "zod": "4.6.5"
+  }
+}

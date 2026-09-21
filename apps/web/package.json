@@ -1,0 +1,27 @@
+{
+  "name": "@cnmechanic/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build && node --import tsx ../../scripts/web-assets.ts",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.4",
+    "@supabase/supabase-js": "2.116.0",
+    "@cnmechanic/schemas": "0.1.0",
+    "@cnmechanic/config": "0.1.0",
+    "@cnmechanic/api-client": "0.1.0",
+    "@cnmechanic/webmcp": "0.1.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "tailwindcss": "4.3.3",
+    "@tailwindcss/vite": "4.3.3"
+  }
+}
