@@ -10,4 +10,8 @@ Vehicle data references normalized makes and models. VINs are stored only on `ve
 
 Services and categories are controlled reference data. `organization_services` declares an organization capability; `location_services` narrows that capability to a particular location. The service-request policy requires a current owner and an active matching capability. Requests contain no appointment, pricing, payment, estimate, assignment, or marketplace state.
 
+`location_services` is enforced in both directions by database triggers: an active organization capability must exist before a location can enable that service, and disabling or deleting that organization capability is rejected while an active location capability depends on it. This avoids destructive cascades and prevents an invalid committed state. `CUSTOMER` is a product role; it is intentionally separate from the `platformRoleSchema`, which contains only CN operational and administrative roles. Organization profile fields remain stored in the core schema but are deliberately deferred from the current membership-focused API until business-profile/search work in a later phase.
+
 The Phase 2 API exposes public read-only catalog endpoints and authenticated endpoints for a caller's vehicles, safe ownership history, authorized organization locations/services, and service-request creation. WebMCP remains limited to its Phase 1 platform-info tool and exposes no domain mutation.
+
+Service requests transition from `DRAFT` to `SUBMITTED` or `CANCELLED`; from `SUBMITTED` to `CLOSED` or `CANCELLED`. `CANCELLED` and `CLOSED` are terminal. Submission timestamps remain as history after closure or cancellation.
