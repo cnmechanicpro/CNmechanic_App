@@ -27,7 +27,8 @@
       "name": "cnmechanic-api",
       "vars": {
         "ENVIRONMENT": "production",
-        "ALLOWED_ORIGINS": "https://www.cnmechanic.com"
+        "ALLOWED_ORIGINS": "https://www.cnmechanic.com",
+        "SUPABASE_URL": "https://fzvqeeydbblcaxjrfwxl.supabase.co"
       },
       "routes": [
         {
