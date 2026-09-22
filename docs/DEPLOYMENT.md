@@ -1,9 +1,13 @@
 # Deployment
 
-Phase 1 has not deployed any Pages project, Worker, Supabase project, DNS record or secret.
+Phase 1 did not deploy any Pages project, Worker, Supabase project, DNS record or secret. Inspect the live account before each production release; this historical statement is not a current inventory.
 
 Before a manual preview deployment, create independent preview Supabase and Cloudflare resources; set a preview Pages origin; provide `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` through Cloudflare secrets; configure matching frontend public values; apply migrations; and run the Docker-backed Supabase test. Preview must never use production data or accept production browser origins.
 
 Before production, confirm domain ownership and configure `www.cnmechanic.com` for Pages, `api.cnmechanic.com` for the Worker, and a path/query-preserving apex redirect. Set only `https://www.cnmechanic.com` as the API’s production CORS origin. Add the production Supabase URL and publishable key as secrets, apply and verify migrations, run smoke checks for health/version/auth/RLS, configure alerts/log retention/backup restore procedures, then deploy through a reviewed release.
 
 CI does not deploy. It runs lint, TypeScript, application tests, the static Pages build, generated Worker binding checks, Worker dry run, and a Docker-backed `supabase db reset` plus pgTAP suite. Roll back a Worker through Cloudflare deployment/version controls and Pages through a prior Pages deployment only after checking the failed release’s database compatibility. Never roll back a database migration destructively without an explicit recovery plan.
+
+The Git-connected Pages project uses repository root, production branch `main`, build command `npm run build:web`, and output directory `apps/web/dist`. It must not run the root `npm run build` or a Worker deploy command. Configure the production `VITE_` values from `apps/web/.env.example` before its first build; preview builds require separate preview Supabase resources and values.
+
+The Worker is a separate application in `apps/worker`, with configuration at `apps/worker/wrangler.jsonc`. From repository root, verify the production target with `npx wrangler deploy --dry-run --config apps/worker/wrangler.jsonc --env production`; deploy it with the same command without `--dry-run` only after the required checks and secrets are in place. A Workers Builds integration must use that explicit config and environment for its deploy command, and its project name must match the configured production Worker name `cnmechanic-api`. A generic root-level `npx wrangler deploy` detects the monorepo root, while the workspace's `build:worker` script intentionally dry-runs the local environment for CI. GitHub CI itself does not deploy the Worker.
