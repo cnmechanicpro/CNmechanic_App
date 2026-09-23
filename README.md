@@ -1,6 +1,6 @@
 # CNMechanic
 
-CNMechanic is building a trusted mechanic network. This repository currently contains Phase 1: the secure Cloudflare and Supabase foundation. Discovery, booking, repair, payments, reviews and vehicle records are deliberately out of scope.
+CNMechanic is a two-sided automotive marketplace foundation: customers discover qualified repair professionals, and verified mechanics become eligible for qualified repair demand. Phase 3 adds public mechanic/shop/service discovery, authoritative provider eligibility, SEO pages, business provenance/claims, and five read-only WebMCP discovery tools. Booking, dispatch, job acceptance, payments, availability mutation, reviews, and admin workflows remain out of scope.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ WebMCP adapter -> typed API client -> Worker -> shared domain services
 Remote MCP is planned at api.cnmechanic.com/mcp; it is not implemented.
 ```
 
-The canonical production web origin is `https://www.cnmechanic.com`; the planned API origin is `https://api.cnmechanic.com`.
+The canonical production origins are `https://www.cnmechanic.com` and `https://api.cnmechanic.com`. This Phase 3 branch is not deployed.
 
 ## Layout
 
@@ -43,7 +43,7 @@ npm run dev:worker
 npm run dev:web
 ```
 
-The frontend is served at `http://127.0.0.1:5173` and the Worker at `http://127.0.0.1:8787`. Without local Supabase values, the public foundation remains usable but sign-in is intentionally unavailable.
+The frontend is served at `http://127.0.0.1:5173` and the Worker at `http://127.0.0.1:8787`. Without local Supabase values, sign-in and database-backed discovery are intentionally unavailable; static content still renders.
 
 To enable local authentication, start Supabase, obtain its local URL and anonymous key from `supabase status`, and set the matching public values in both local environment files. Never place a service-role key in either file.
 
@@ -67,8 +67,8 @@ git diff --check
 
 ## Deploying
 
-No deployment is configured or performed by this repository. See [Deployment](docs/DEPLOYMENT.md) for the required manual environment, secret and domain steps. CI validates builds only.
+Production deployment remains a reviewed manual operation. Phase 3 must not be deployed until its migration, data provenance, and release evidence are approved. See [Deployment](docs/DEPLOYMENT.md).
 
 ## WebMCP status
 
-`get_platform_info` is the sole registered browser-agent proof tool: a public, read-only call to the Worker version endpoint. It uses feature detection and harmlessly skips unsupported browsers. Remote MCP, account-scoped tools and all transactional tools are future work.
+Five optional public `READ_SAFE` tools expose the same discovery paths as the website: mechanic/shop search, mechanic/shop profiles, and service search. They feature-detect browser support and never affect core search. See [WebMCP search](docs/WEBMCP_SEARCH.md).

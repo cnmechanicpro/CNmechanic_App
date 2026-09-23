@@ -25,6 +25,20 @@ export const serviceRequestSchema=z.object({id:idSchema,vehicleId:idSchema,organ
 export const serviceRequestCreateSchema=z.strictObject({vehicleId:idSchema,organizationId:idSchema,locationId:idSchema.optional(),serviceId:idSchema,customerNote:z.string().trim().max(2000).optional()});
 export const paginationSchema = z.strictObject({limit:z.coerce.number().int().min(1).max(100).default(20),cursor:idSchema.optional()});
 export const emptyInputSchema = z.strictObject({});
+export const slugSchema = z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+export const publicReferenceSchema = z.strictObject({slug:slugSchema,name:z.string().trim().min(1).max(200)});
+export const publicLocationSchema = z.strictObject({name:z.string(),slug:slugSchema,type:z.enum(['STOREFRONT','MOBILE','SERVICE_AREA']),city:z.string().nullable(),region:z.string().nullable(),postalCode:z.string().nullable(),countryCode:z.string().length(2)});
+export const publicServiceAreaSchema = z.strictObject({label:z.string(),city:z.string().nullable(),region:z.string().nullable(),postalCode:z.string().nullable(),countryCode:z.string().length(2),radiusMiles:z.number().nonnegative().nullable()});
+export const publicMechanicSchema = z.strictObject({id:idSchema,slug:slugSchema,publicName:z.string(),headline:z.string().nullable(),biography:z.string().nullable(),verified:z.boolean(),operationMode:z.enum(['INDEPENDENT','SHOP_ASSOCIATED','HYBRID']),mobileCapable:z.boolean(),services:z.array(publicReferenceSchema),vehicleMakes:z.array(publicReferenceSchema),specialties:z.array(publicReferenceSchema),serviceAreas:z.array(publicServiceAreaSchema),shops:z.array(publicReferenceSchema.extend({verified:z.boolean()}))});
+export const publicShopSchema = z.strictObject({id:idSchema,slug:slugSchema,name:z.string(),description:z.string().nullable(),organizationType:z.enum(['REPAIR_SHOP','MOBILE_MECHANIC','DEALERSHIP','SPECIALTY_SHOP','SERVICE_NETWORK','OTHER']),verified:z.boolean(),websiteUrl:z.url().nullable(),publicPhone:z.string().nullable(),locations:z.array(publicLocationSchema),services:z.array(publicReferenceSchema),vehicleMakes:z.array(publicReferenceSchema),mechanics:z.array(publicReferenceSchema.extend({verified:z.boolean()}))});
+export const publicServiceSchema = serviceSchema.extend({categoryName:z.string()});
+export const pageMetaSchema = z.strictObject({limit:z.number().int().min(1).max(50),offset:z.number().int().nonnegative(),total:z.number().int().nonnegative(),hasMore:z.boolean()});
+export const mechanicSearchInputSchema = z.strictObject({query:z.string().trim().min(1).max(120).optional(),city:z.string().trim().min(1).max(100).optional(),region:z.string().trim().min(1).max(100).optional(),postalCode:z.string().trim().min(2).max(20).optional(),latitude:z.number().min(-90).max(90).optional(),longitude:z.number().min(-180).max(180).optional(),radiusMiles:z.number().positive().max(500).optional(),service:z.string().trim().max(100).pipe(slugSchema).optional(),vehicleMake:z.string().trim().max(100).pipe(slugSchema).optional(),specialty:z.string().trim().max(100).pipe(slugSchema).optional(),mobile:z.boolean().optional(),verified:z.literal(true).default(true),limit:z.number().int().min(1).max(50).default(20),offset:z.number().int().min(0).max(10000).default(0)}).superRefine((v,ctx)=>{const geo=[v.latitude,v.longitude,v.radiusMiles];if(geo.some(x=>x!==undefined)&&geo.some(x=>x===undefined))ctx.addIssue({code:'custom',message:'latitude, longitude and radiusMiles must be provided together'});});
+export const shopSearchInputSchema = z.strictObject({query:z.string().trim().min(1).max(120).optional(),city:z.string().trim().min(1).max(100).optional(),region:z.string().trim().min(1).max(100).optional(),postalCode:z.string().trim().min(2).max(20).optional(),service:z.string().trim().max(100).pipe(slugSchema).optional(),vehicleMake:z.string().trim().max(100).pipe(slugSchema).optional(),verified:z.boolean().optional(),limit:z.number().int().min(1).max(50).default(20),offset:z.number().int().min(0).max(10000).default(0)});
+export const serviceSearchInputSchema = z.strictObject({query:z.string().trim().min(1).max(120).optional(),category:z.string().trim().max(100).pipe(slugSchema).optional(),limit:z.number().int().min(1).max(50).default(20),offset:z.number().int().min(0).max(10000).default(0)});
+export const mechanicSearchResultSchema=z.strictObject({items:z.array(publicMechanicSchema),page:pageMetaSchema});
+export const shopSearchResultSchema=z.strictObject({items:z.array(publicShopSchema),page:pageMetaSchema});
+export const serviceSearchResultSchema=z.strictObject({items:z.array(publicServiceSchema),page:pageMetaSchema});
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
 export type Profile = z.infer<typeof profileSchema>;
 export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
@@ -47,4 +61,9 @@ export const contracts = {
  organizationLocations:{method:'GET',path:'/api/v1/organizations/{id}/locations',auth:true,response:z.array(locationSchema)},
  organizationServices:{method:'GET',path:'/api/v1/organizations/{id}/services',auth:true,response:z.array(serviceSchema)},
  createServiceRequest:{method:'POST',path:'/api/v1/service-requests',auth:true,input:serviceRequestCreateSchema,response:serviceRequestSchema},
+ searchMechanics:{method:'GET',path:'/api/v1/search/mechanics',auth:false,input:mechanicSearchInputSchema,response:mechanicSearchResultSchema},
+ searchShops:{method:'GET',path:'/api/v1/search/shops',auth:false,input:shopSearchInputSchema,response:shopSearchResultSchema},
+ searchServices:{method:'GET',path:'/api/v1/search/services',auth:false,input:serviceSearchInputSchema,response:serviceSearchResultSchema},
+ publicMechanic:{method:'GET',path:'/api/v1/mechanics/{slug}',auth:false,response:publicMechanicSchema},
+ publicShop:{method:'GET',path:'/api/v1/shops/{slug}',auth:false,response:publicShopSchema},
 } as const;

@@ -27,6 +27,7 @@
     "packages/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
-    "*.ts"
+    "*.ts",
+    "functions/**/*.ts"
   ]
 }

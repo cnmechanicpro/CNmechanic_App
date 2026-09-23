@@ -102,5 +102,37 @@ describe('migration replay and PostgreSQL RLS',()=>{
   await asUser(a,async()=>{await db.query('insert into public.professional_location_assignments(profile_id,location_id) values($1,$2)',[a,locationB]);expect((await db.query('select location_id from public.professional_location_assignments where profile_id=$1 and location_id=$2',[a,locationB])).rows).toEqual([{location_id:locationB}]);});
  });
  it('installs vehicle privacy policies and current-owner integrity',async()=>{const policies=await db.query<{policyname:string}>("select policyname from pg_policies where schemaname='public' and tablename in ('vehicles','vehicle_ownerships','service_requests')");expect(policies.rows.map(row=>row.policyname)).toEqual(expect.arrayContaining(['vehicles_read_authorized','ownerships_read_self_or_admin','service_requests_create_owner']));const indexes=await db.query<{indexname:string}>("select indexname from pg_indexes where schemaname='public' and tablename='vehicle_ownerships'");expect(indexes.rows.map(row=>row.indexname)).toContain('vehicle_ownerships_one_current_owner_idx');});
+ it('publishes only authoritative mechanic and shop marketplace records',async()=>{
+  const specialty='80000000-0000-4000-8000-000000000001';
+  await db.exec(`set role service_role;
+   update public.organizations set status='CN_VERIFIED',public_visibility='PUBLISHED',description='European repair specialists' where id='${orgA}';
+   update public.locations set public_visibility='PUBLISHED',city='Boston',region='MA',postal_code='02108' where id='${locationA}';
+   insert into public.professional_profiles(profile_id,public_name,headline,slug,lifecycle_status,verification_status,verified_at,operation_mode,mobile_capable,public_visibility)
+    values ('${a}','Alex Technician','European diagnostics','alex-technician','ELIGIBLE_FOR_JOBS','VERIFIED',now(),'HYBRID',true,'PUBLISHED')
+    on conflict(profile_id) do update set public_name=excluded.public_name,headline=excluded.headline,slug=excluded.slug,lifecycle_status=excluded.lifecycle_status,verification_status=excluded.verification_status,verified_at=excluded.verified_at,operation_mode=excluded.operation_mode,mobile_capable=excluded.mobile_capable,public_visibility=excluded.public_visibility;
+   insert into public.specialties(id,name,slug) values ('${specialty}','European diagnostics','european-diagnostics');
+   insert into public.professional_services(mechanic_id,service_id) select id,'${serviceX}' from public.professional_profiles where profile_id='${a}';
+   insert into public.organization_vehicle_makes(organization_id,vehicle_make_id) values ('${orgA}','${make}');
+   insert into public.professional_vehicle_makes(mechanic_id,vehicle_make_id) select id,'${make}' from public.professional_profiles where profile_id='${a}';
+   insert into public.professional_specialties(mechanic_id,specialty_id) select id,'${specialty}' from public.professional_profiles where profile_id='${a}';
+   insert into public.mechanic_service_areas(mechanic_id,label,city,region,postal_code,latitude,longitude,radius_miles) select id,'Metro service area','Boston','MA','02108',42.3601,-71.0589,35 from public.professional_profiles where profile_id='${a}';
+   reset role;`);
+  await db.exec('set role anon');try{
+   const mechanics=await db.query<{slug:string;public_name:string;total_count:bigint}>("select slug,public_name,total_count from public.search_public_mechanics(p_service_slug=>'service-x',p_vehicle_make_slug=>'saab',p_specialty_slug=>'european-diagnostics',p_city=>'Boston')");
+   expect(mechanics.rows).toHaveLength(1);expect(mechanics.rows[0]).toMatchObject({slug:'alex-technician',public_name:'Alex Technician'});
+   expect((await db.query("select slug from public.search_public_mechanics(p_slug=>'alex-technician',p_limit=>1)")).rows).toEqual([{slug:'alex-technician'}]);
+   const shops=await db.query<{slug:string;total_count:bigint}>("select slug,total_count from public.search_public_shops(p_service_slug=>'service-x',p_vehicle_make_slug=>'saab',p_city=>'Boston')");expect(shops.rows).toHaveLength(1);expect(shops.rows[0].slug).toBe('a');
+   await expect(db.exec('select profile_id from public.professional_profiles')).rejects.toThrow(/permission denied/);
+  }finally{await db.exec('reset role');}
+ });
+ it('rejects self-verification and hides non-public providers',async()=>{
+  await asUser(a,async()=>{await expect(db.exec("update public.professional_profiles set verification_status='VERIFIED' where profile_id=auth.uid()")).rejects.toThrow(/permission denied/);await expect(db.exec("update public.professional_profiles set lifecycle_status='ELIGIBLE_FOR_JOBS' where profile_id=auth.uid()")).rejects.toThrow(/permission denied/);});
+  await db.exec(`set role service_role;update public.professional_profiles set public_visibility='HIDDEN' where profile_id='${a}';reset role;set role anon;`);try{expect((await db.query('select * from public.search_public_mechanics()')).rows).toEqual([]);}finally{await db.exec('reset role');await db.exec(`set role service_role;update public.professional_profiles set public_visibility='PUBLISHED' where profile_id='${a}';reset role;`);}
+ });
+ it('allows an owner-scoped claim without exposing claim or duplicate-review internals',async()=>{
+  await db.exec(`set role service_role;update public.organizations set status='UNCLAIMED',public_visibility='PUBLISHED' where id='${orgB}';reset role;`);
+  await asUser(a,async()=>{const claim=await db.query('insert into public.business_claims(organization_id,claimant_profile_id,claim_type) values($1,$2,$3) returning status',[orgB,a,'OWNER']);expect(claim.rows).toEqual([{status:'SUBMITTED'}]);await expect(db.query('insert into public.business_claims(organization_id,claimant_profile_id,claim_type) values($1,$2,$3)',[orgB,b,'OWNER'])).rejects.toThrow(/row-level security/);});
+  await asUser(b,async()=>{expect((await db.query('select id from public.business_claims')).rows).toEqual([]);await expect(db.exec('select * from private.organization_duplicate_candidates')).rejects.toThrow(/permission denied/);});
+ });
  it('enables RLS on every created public table',async()=>{expect((await db.query("select relname from pg_class join pg_namespace n on n.oid=relnamespace where n.nspname='public' and relkind='r' and not relrowsecurity")).rows).toEqual([]);});
 });
