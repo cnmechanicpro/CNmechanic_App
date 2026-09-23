@@ -48,6 +48,8 @@ Implementation fix commit: `f0a30f320741acc2e26ef1b20facac019bd474ce`.
 
 The fix adds one route metadata resolver used by React, preserves matching edge metadata for mechanic/shop routes until real profile data loads, then intentionally sets profile metadata from the loaded public DTO. Known service and brand slugs receive taxonomy-specific title, description, canonical, robots, and JSON-LD. Invalid taxonomy routes and unknown routes receive `Page not found | CNMechanic`, `noindex, nofollow`, no canonical, and no JSON-LD. Provider misses continue to return a real HTTP 404 from the Pages edge renderer.
 
+Final evidence reconciliation confirmed that this policy is implemented consistently: not-found metadata represents canonical as intentionally absent, removes any canonical left by the prior SPA route, and removes CN JSON-LD. Regression coverage explicitly asserts `document.querySelector('link[rel="canonical"]') === null` for generic unknown, invalid service, and invalid brand routes. Legitimate provider, service, brand, and normal public pages retain their canonical URLs.
+
 The review also exposed two adjacent pre-hydration defects: static/edge title replacement targeted an obsolete base-title literal, and generated pages could contain duplicate robots tags. The renderer now matches the actual base title and deterministically replaces the existing robots tag.
 
 Eight focused metadata regression cases prove valid dynamic routes do not become `Page not found | CNMechanic` after hydration. Production-build browser QA confirmed:
