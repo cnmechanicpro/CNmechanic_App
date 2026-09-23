@@ -21,7 +21,7 @@ No booking, dispatch, job acceptance, payment, mechanic-availability mutation, c
 
 ## Behavioral evidence
 
-`npm test` passed **55 tests in 4 files**. `npm run test:db` passed **23 database/RLS tests**. New evidence covers:
+`npm test` passed **63 tests in 5 files**. `npm run test:db` passed **23 database/RLS tests**. New evidence covers:
 
 - verified publication and hidden-provider exclusion,
 - mechanic/shop service, make, specialty and location filtering,
@@ -35,7 +35,32 @@ No booking, dispatch, job acceptance, payment, mechanic-availability mutation, c
 - eligibility/ranking separation,
 - five-tool READ_SAFE classification and schema registration,
 - optional/failed WebMCP support without app failure,
-- Pages provider metadata and HTTP 404 behavior.
+- Pages provider metadata and HTTP 404 behavior,
+- preservation of provider edge metadata through React hydration,
+- service/brand taxonomy metadata through React hydration,
+- genuine unknown-route 404 metadata, `noindex`, and JSON-LD removal.
+
+## External review correction — metadata hydration
+
+External review found that `Metadata()` in `apps/web/src/App.tsx` used a static route map and assigned `Page not found | CNMechanic` to every unmatched route. Valid dynamic mechanic, shop, service, and brand URLs could therefore start with correct edge/prerendered metadata and lose it after React hydration.
+
+Implementation fix commit: `f0a30f320741acc2e26ef1b20facac019bd474ce`.
+
+The fix adds one route metadata resolver used by React, preserves matching edge metadata for mechanic/shop routes until real profile data loads, then intentionally sets profile metadata from the loaded public DTO. Known service and brand slugs receive taxonomy-specific title, description, canonical, robots, and JSON-LD. Invalid taxonomy routes and unknown routes receive `Page not found | CNMechanic`, `noindex, nofollow`, no canonical, and no JSON-LD. Provider misses continue to return a real HTTP 404 from the Pages edge renderer.
+
+The review also exposed two adjacent pre-hydration defects: static/edge title replacement targeted an obsolete base-title literal, and generated pages could contain duplicate robots tags. The renderer now matches the actual base title and deterministically replaces the existing robots tag.
+
+Eight focused metadata regression cases prove valid dynamic routes do not become `Page not found | CNMechanic` after hydration. Production-build browser QA confirmed:
+
+| Route | Before hydration | After hydration | Canonical / robots / JSON-LD |
+|---|---|---|---|
+| `/mechanics/alex-technician` | `Alex Technician | CNMechanic` | unchanged | exact canonical; `index, follow`; one Person JSON-LD block |
+| `/shops/euro-garage` | `Euro Garage | CNMechanic` | unchanged | exact canonical; `index, follow`; one AutoRepair JSON-LD block |
+| `/services/diagnostics` | `Diagnostics specialists | CNMechanic` | unchanged | exact canonical; `index, follow`; one taxonomy JSON-LD block |
+| `/brands/bmw` | `BMW mechanics | CNMechanic` | unchanged | exact canonical; `index, follow`; one taxonomy JSON-LD block |
+| unknown provider | HTTP 404; `Page not found | CNMechanic` | unchanged | no canonical; `noindex, nofollow`; no JSON-LD |
+
+Descriptions also remained exact before and after hydration, and the browser reported no console errors.
 
 ## Security review
 
@@ -57,7 +82,7 @@ Playwright used installed Chrome because the Browser plugin was unavailable. The
 
 | Command | Result |
 |---|---|
-| `npm test` | PASS — 55/55 |
+| `npm test` | PASS — 63/63 |
 | `npm run test:db` | PASS — 23/23 |
 | `npm run lint` | PASS |
 | `npm run typecheck` | PASS |
@@ -66,6 +91,8 @@ Playwright used installed Chrome because the Browser plugin was unavailable. The
 | `git diff --check` | PASS |
 | Desktop/mobile Playwright QA | PASS — no console errors |
 | Linked Supabase lint | PASS — no textual findings |
+
+GitHub Actions `verify` passed for the implementation fix commit in **2m 9s** ([run 35867732395](https://github.com/cnmechanicpro/CNmechanic_App/actions/runs/35867732395)). The Cloudflare Pages branch-preview check also passed; no production deployment was performed.
 
 ## Release boundary and limitations
 
