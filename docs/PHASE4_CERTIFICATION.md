@@ -76,6 +76,6 @@ GitHub CI is verification-only. Cloudflare Git integrations currently publish `m
 
 ## GitHub evidence
 
-- Final branch head: pending final certification commit.
-- Pull request: pending.
-- GitHub CI: pending.
+- Certified implementation commit: `0234103dd3e3a396b3f39be4ab131b0e812beec4`.
+- Pull request: [#10](https://github.com/cnmechanicpro/CNmechanic_App/pull/10).
+- The first two `verify` attempts completed application lint, types, tests, and build, then failed before Docker database startup because anonymous GHCR image pulls were rate-limited. The branch now authenticates those read-only pulls with the workflow's short-lived `GITHUB_TOKEN`; the final rerun result is recorded in the PR checks.
