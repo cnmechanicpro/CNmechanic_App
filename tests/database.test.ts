@@ -67,30 +67,28 @@ describe('migration replay and PostgreSQL RLS',()=>{
   await expect(db.query("insert into public.vehicle_ownerships(vehicle_id,owner_profile_id,ownership_status,ownership_ended_at) values($1,$2,'CURRENT',now())",[vehicleA,b])).rejects.toThrow(/check constraint/);
   await expect(db.query("insert into public.vehicle_ownerships(vehicle_id,owner_profile_id,ownership_status) values($1,$2,'FORMER')",[vehicleA,b])).rejects.toThrow(/check constraint/);
  });
- let requestA:string;
- it('authorizes a service request only for an owned vehicle and offered location service',async()=>{
-  await asUser(a,async()=>{
-   requestA=(await db.query<{id:string}>('insert into public.service_requests(customer_profile_id,vehicle_id,organization_id,location_id,service_id) values($1,$2,$3,$4,$5) returning id',[a,vehicleA,orgA,locationA,serviceX])).rows[0].id;
-   expect(requestA).toBeTruthy();
-   await expect(db.query('insert into public.service_requests(customer_profile_id,vehicle_id,organization_id,location_id,service_id) values($1,$2,$3,$4,$5)',[a,vehicleB,orgA,locationA,serviceX])).rejects.toThrow(/row-level security/);
-   await expect(db.query('insert into public.service_requests(customer_profile_id,vehicle_id,organization_id,location_id,service_id) values($1,$2,$3,$4,$5)',[a,vehicleA,orgB,locationB,serviceX])).rejects.toThrow(/row-level security/);
-   await expect(db.query('insert into public.service_requests(customer_profile_id,vehicle_id,organization_id,location_id,service_id) values($1,$2,$3,$4,$5)',[a,vehicleA,orgA,locationB,serviceX])).rejects.toThrow(/location does not belong/);
-   await expect(db.query('insert into public.service_requests(customer_profile_id,vehicle_id,organization_id,location_id,service_id) values($1,$2,$3,$4,$5)',[a,vehicleA,orgA,locationA,serviceY])).rejects.toThrow(/row-level security/);
-  });
-  await asUser(b,async()=>{expect((await db.query("update public.service_requests set status='CANCELLED' where id=$1 returning id",[requestA])).rows).toEqual([]);});
- });
- it('enforces draft, submitted and terminal request transitions',async()=>{
-  await asUser(a,async()=>{
-   await expect(db.query("update public.service_requests set status='CLOSED' where id=$1",[requestA])).rejects.toThrow(/invalid service request transition/);
-   expect((await db.query("update public.service_requests set status='SUBMITTED' where id=$1 returning status,submitted_at",[requestA])).rows[0]).toMatchObject({status:'SUBMITTED',submitted_at:expect.any(Date)});
-   await expect(db.query("update public.service_requests set status='DRAFT' where id=$1",[requestA])).rejects.toThrow(/invalid service request transition/);
-   expect((await db.query("update public.service_requests set status='CLOSED' where id=$1 returning status,closed_at",[requestA])).rows[0]).toMatchObject({status:'CLOSED',closed_at:expect.any(Date)});
-   await expect(db.query("update public.service_requests set status='CANCELLED' where id=$1",[requestA])).rejects.toThrow(/invalid service request transition/);
-   const cancelled=(await db.query<{id:string}>('insert into public.service_requests(customer_profile_id,vehicle_id,organization_id,location_id,service_id) values($1,$2,$3,$4,$5) returning id',[a,vehicleA,orgA,locationA,serviceX])).rows[0].id;
-   expect((await db.query("update public.service_requests set status='CANCELLED' where id=$1 returning status",[cancelled])).rows).toEqual([{status:'CANCELLED'}]);
-   await expect(db.query("update public.service_requests set status='SUBMITTED' where id=$1",[cancelled])).rejects.toThrow(/invalid service request transition/);
-  });
- });
+	let requestA:string;
+	it('authorizes a service request only for an owned vehicle and offered location service',async()=>{
+	 await asUser(a,async()=>{
+	  requestA=(await db.query<{id:string}>("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_organization_id=>$3,p_location_id=>$4,p_submit=>false,p_idempotency_key=>'request-a') as id",[vehicleA,serviceX,orgA,locationA])).rows[0].id;
+	  expect(requestA).toBeTruthy();
+	  await expect(db.query("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_idempotency_key=>'wrong-owner')",[vehicleB,serviceX])).rejects.toThrow(/vehicle access denied/);
+	  await expect(db.query("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_organization_id=>$3,p_location_id=>$4,p_idempotency_key=>'wrong-service')",[vehicleA,serviceX,orgB,locationB])).rejects.toThrow(/does not offer service/);
+	  await expect(db.query("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_organization_id=>$3,p_location_id=>$4,p_idempotency_key=>'wrong-location')",[vehicleA,serviceX,orgA,locationB])).rejects.toThrow(/location does not belong/);
+	  await expect(db.query("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_organization_id=>$3,p_location_id=>$4,p_idempotency_key=>'location-mismatch')",[vehicleA,serviceY,orgA,locationA])).rejects.toThrow(/does not offer service/);
+	 });
+	 await asUser(b,async()=>{await expect(db.query('select public.cancel_service_request($1,$2)',[requestA,'attack'])).rejects.toThrow(/request access denied/);expect((await db.query('select id from public.service_requests where id=$1',[requestA])).rows).toEqual([]);});
+	});
+	it('enforces the Phase 4 request transition graph and terminal states',async()=>{
+	 await db.exec('set role service_role');try{
+	  await expect(db.query("update public.service_requests set status='ASSIGNED' where id=$1",[requestA])).rejects.toThrow(/invalid service request transition/);
+	  expect((await db.query("update public.service_requests set status='SUBMITTED' where id=$1 returning status,submitted_at",[requestA])).rows[0]).toMatchObject({status:'SUBMITTED',submitted_at:expect.any(Date)});
+	  expect((await db.query("update public.service_requests set status='MATCHING' where id=$1 returning status,matching_started_at",[requestA])).rows[0]).toMatchObject({status:'MATCHING',matching_started_at:expect.any(Date)});
+	  await expect(db.query("update public.service_requests set status='DRAFT' where id=$1",[requestA])).rejects.toThrow(/invalid service request transition/);
+	  expect((await db.query("update public.service_requests set status='NO_MATCH' where id=$1 returning status",[requestA])).rows).toEqual([{status:'NO_MATCH'}]);
+	  await expect(db.query("update public.service_requests set status='SUBMITTED' where id=$1",[requestA])).rejects.toThrow(/invalid service request transition/);
+	 }finally{await db.exec('reset role');}
+	});
  it('validates professional assignments against active membership in each organization',async()=>{
   await db.query('insert into public.professional_profiles(profile_id) values($1)',[a]);
   await asUser(a,async()=>{
@@ -101,7 +99,7 @@ describe('migration replay and PostgreSQL RLS',()=>{
   await db.query('insert into public.organization_memberships(organization_id,user_id,role) values($1,$2,$3)',[orgB,a,'SHOP_MANAGER']);
   await asUser(a,async()=>{await db.query('insert into public.professional_location_assignments(profile_id,location_id) values($1,$2)',[a,locationB]);expect((await db.query('select location_id from public.professional_location_assignments where profile_id=$1 and location_id=$2',[a,locationB])).rows).toEqual([{location_id:locationB}]);});
  });
- it('installs vehicle privacy policies and current-owner integrity',async()=>{const policies=await db.query<{policyname:string}>("select policyname from pg_policies where schemaname='public' and tablename in ('vehicles','vehicle_ownerships','service_requests')");expect(policies.rows.map(row=>row.policyname)).toEqual(expect.arrayContaining(['vehicles_read_authorized','ownerships_read_self_or_admin','service_requests_create_owner']));const indexes=await db.query<{indexname:string}>("select indexname from pg_indexes where schemaname='public' and tablename='vehicle_ownerships'");expect(indexes.rows.map(row=>row.indexname)).toContain('vehicle_ownerships_one_current_owner_idx');});
+	it('installs vehicle and marketplace privacy policies with current-owner integrity',async()=>{const policies=await db.query<{policyname:string}>("select policyname from pg_policies where schemaname='public' and tablename in ('vehicles','vehicle_ownerships','service_requests','job_offers','service_request_assignments')");expect(policies.rows.map(row=>row.policyname)).toEqual(expect.arrayContaining(['vehicles_read_authorized','ownerships_read_self_or_admin','service_requests_read_authorized','job_offers_read_authorized','assignments_read_authorized']));const indexes=await db.query<{indexname:string}>("select indexname from pg_indexes where schemaname='public' and tablename='vehicle_ownerships'");expect(indexes.rows.map(row=>row.indexname)).toContain('vehicle_ownerships_one_current_owner_idx');});
  it('publishes only authoritative mechanic and shop marketplace records',async()=>{
   const specialty='80000000-0000-4000-8000-000000000001';
   await db.exec(`set role service_role;
@@ -125,10 +123,52 @@ describe('migration replay and PostgreSQL RLS',()=>{
    await expect(db.exec('select profile_id from public.professional_profiles')).rejects.toThrow(/permission denied/);
   }finally{await db.exec('reset role');}
  });
- it('rejects self-verification and hides non-public providers',async()=>{
+	it('rejects self-verification and hides non-public providers',async()=>{
   await asUser(a,async()=>{await expect(db.exec("update public.professional_profiles set verification_status='VERIFIED' where profile_id=auth.uid()")).rejects.toThrow(/permission denied/);await expect(db.exec("update public.professional_profiles set lifecycle_status='ELIGIBLE_FOR_JOBS' where profile_id=auth.uid()")).rejects.toThrow(/permission denied/);});
   await db.exec(`set role service_role;update public.professional_profiles set public_visibility='HIDDEN' where profile_id='${a}';reset role;set role anon;`);try{expect((await db.query('select * from public.search_public_mechanics()')).rows).toEqual([]);}finally{await db.exec('reset role');await db.exec(`set role service_role;update public.professional_profiles set public_visibility='PUBLISHED' where profile_id='${a}';reset role;`);}
- });
+	});
+	it('matches only eligible providers, creates bounded offers, and isolates mechanics',async()=>{
+	 const mechanicB='80000000-0000-4000-8000-000000000020';
+	 await db.exec(`set role service_role;
+	  insert into public.professional_profiles(id,profile_id,public_name,headline,slug,lifecycle_status,verification_status,verified_at,operation_mode,mobile_capable,public_visibility)
+	   values ('${mechanicB}','${b}','Blair Mechanic','Mobile Saab specialist','blair-mechanic','ELIGIBLE_FOR_JOBS','VERIFIED',now(),'INDEPENDENT',true,'PUBLISHED');
+	  insert into public.professional_services(mechanic_id,service_id) values ('${mechanicB}','${serviceX}');
+	  insert into public.professional_vehicle_makes(mechanic_id,vehicle_make_id) values ('${mechanicB}','${make}');
+	  insert into public.mechanic_service_areas(mechanic_id,label,city,region,postal_code) values ('${mechanicB}','Boston','Boston','MA','02108');
+	  reset role;`);
+	 let requestId='';
+	 await asUser(a,async()=>{requestId=(await db.query<{id:string}>("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_city=>'Boston',p_region=>'MA',p_mobile_service_preference=>'MOBILE',p_idempotency_key=>'phase4-match') as id",[vehicleA,serviceX])).rows[0].id;});
+	 await db.exec('set role service_role');try{
+	  const candidates=await db.query<{mechanic_id:string}>('select mechanic_id from private.find_eligible_providers($1,10)',[requestId]);expect(candidates.rows.map(row=>row.mechanic_id)).toContain(mechanicB);
+	  expect((await db.query<{count:number}>("select private.create_job_offers($1,array[$2]::uuid[],now()+interval '1 hour') as count",[requestId,mechanicB])).rows).toEqual([{count:1}]);
+	 }finally{await db.exec('reset role');}
+	 const offer=(await db.query<{id:string}>('select id from public.job_offers where service_request_id=$1 and mechanic_id=$2',[requestId,mechanicB])).rows[0].id;
+	 await asUser(a,async()=>{expect((await db.query('select id from public.job_offers where id=$1',[offer])).rows).toEqual([]);await expect(db.query("insert into public.job_offers(service_request_id,mechanic_id,expires_at) values($1,$2,now()+interval '1 hour')",[requestId,mechanicB])).rejects.toThrow(/permission denied/);});
+	 await asUser(b,async()=>{expect((await db.query('select id,status from public.job_offers where id=$1',[offer])).rows).toEqual([{id:offer,status:'OFFERED'}]);});
+	 await asUser(a,async()=>{await expect(db.query('select public.respond_to_job_offer($1,true)',[offer])).rejects.toThrow(/offer access denied/);});
+	 return {requestId,offer,mechanicB};
+	});
+	it('separates acceptance from customer confirmation and creates exactly one assignment',async()=>{
+	 const row=(await db.query<{id:string;service_request_id:string;mechanic_id:string}>("select id,service_request_id,mechanic_id from public.job_offers where status='OFFERED' order by created_at desc limit 1")).rows[0];
+	 await asUser(b,async()=>{expect((await db.query('select public.respond_to_job_offer($1,true) as request_id',[row.id])).rows).toEqual([{request_id:row.service_request_id}]);});
+	 expect((await db.query('select status from public.service_requests where id=$1',[row.service_request_id])).rows).toEqual([{status:'PENDING_CUSTOMER_CONFIRMATION'}]);
+	 await asUser(a,async()=>{const assigned=await db.query<{id:string}>('select public.confirm_job_offer($1) as id',[row.id]);expect(assigned.rows[0].id).toBeTruthy();await expect(db.query('select public.confirm_job_offer($1)',[row.id])).rejects.toThrow(/cannot be confirmed/);});
+	 expect((await db.query('select mechanic_id,status from public.service_request_assignments where service_request_id=$1',[row.service_request_id])).rows).toEqual([{mechanic_id:row.mechanic_id,status:'ASSIGNED'}]);
+	 expect((await db.query('select count(*)::int as count from public.service_request_assignments where service_request_id=$1',[row.service_request_id])).rows).toEqual([{count:1}]);
+	});
+	it('rejects expired offers, cancelled-request acceptance, and ineligible dispatch',async()=>{
+	 const mechanicB='80000000-0000-4000-8000-000000000020';let expiredRequest='',cancelledRequest='';
+	 await asUser(a,async()=>{expiredRequest=(await db.query<{id:string}>("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_idempotency_key=>'phase4-expired') as id",[vehicleA,serviceX])).rows[0].id;cancelledRequest=(await db.query<{id:string}>("select public.create_marketplace_service_request(p_vehicle_id=>$1,p_service_id=>$2,p_idempotency_key=>'phase4-cancel') as id",[vehicleA,serviceX])).rows[0].id;});
+	 let expiredOffer='',cancelledOffer='';await db.exec('set role service_role');try{
+	  await db.query("update public.service_requests set status='MATCHING' where id in ($1,$2)",[expiredRequest,cancelledRequest]);await db.query("update public.service_requests set status='OFFERS_SENT' where id in ($1,$2)",[expiredRequest,cancelledRequest]);
+	  expiredOffer=(await db.query<{id:string}>("insert into public.job_offers(service_request_id,mechanic_id,offered_at,expires_at) values($1,$2,now()-interval '2 hours',now()-interval '1 hour') returning id",[expiredRequest,mechanicB])).rows[0].id;
+	  cancelledOffer=(await db.query<{id:string}>("insert into public.job_offers(service_request_id,mechanic_id,expires_at) values($1,$2,now()+interval '1 hour') returning id",[cancelledRequest,mechanicB])).rows[0].id;
+	 }finally{await db.exec('reset role');}
+	 await asUser(a,async()=>{await db.query("select public.cancel_service_request($1,'no longer needed')",[cancelledRequest]);});
+	 await asUser(b,async()=>{await expect(db.query('select public.respond_to_job_offer($1,true)',[expiredOffer])).rejects.toThrow(/no longer available/);await expect(db.query('select public.respond_to_job_offer($1,true)',[cancelledOffer])).rejects.toThrow(/no longer available/);});
+	 await db.exec(`set role service_role;update public.professional_profiles set verification_status='UNDER_REVIEW',verified_at=null,public_visibility='HIDDEN' where id='${mechanicB}';reset role;`);
+	 const request=(await db.query<{id:string}>('select id from public.service_requests where status=$1 limit 1',['SUBMITTED'])).rows[0]?.id;if(request){await db.exec('set role service_role');try{await expect(db.query("select private.create_job_offers($1,array[$2]::uuid[],now()+interval '1 hour')",[request,mechanicB])).rejects.toThrow(/ineligible mechanic/);}finally{await db.exec('reset role');}}
+	});
  it('allows an owner-scoped claim without exposing claim or duplicate-review internals',async()=>{
   await db.exec(`set role service_role;update public.organizations set status='UNCLAIMED',public_visibility='PUBLISHED' where id='${orgB}';reset role;`);
   await asUser(a,async()=>{const claim=await db.query('insert into public.business_claims(organization_id,claimant_profile_id,claim_type) values($1,$2,$3) returning status',[orgB,a,'OWNER']);expect(claim.rows).toEqual([{status:'SUBMITTED'}]);await expect(db.query('insert into public.business_claims(organization_id,claimant_profile_id,claim_type) values($1,$2,$3)',[orgB,b,'OWNER'])).rejects.toThrow(/row-level security/);});

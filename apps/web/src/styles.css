@@ -13,3 +13,7 @@
 @media(max-width:600px){.directory-page,.profile-page{padding:5rem 1.2rem}.directory-filters{grid-template-columns:1fr}}
 .directory-filters label,.directory-filters .field{color:#1a2734}.directory-filters .field span{color:#1a2734}
 @media(max-width:600px){.directory-intro h1,.profile-page h1{font-size:2.65rem;letter-spacing:-1.7px;line-height:1.02}.directory-intro p{font-size:1rem}}
+
+/* Phase 4 authenticated marketplace */
+.marketplace-workspace{width:min(1080px,calc(100% - 56px))}.marketplace-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 18px}.marketplace-form label{display:flex;flex-direction:column;gap:8px;margin:18px 0;font-size:12px;color:#d7dfe8}.marketplace-form select,.marketplace-form textarea{background:#0b1219;color:#fff;border:1px solid #64778b;border-radius:3px;padding:12px;min-height:48px;width:100%}.marketplace-form textarea{resize:vertical}.marketplace-form .field{margin:18px 0}.marketplace-form .full-field{grid-column:1/-1}.marketplace-form>.button{justify-self:start}.workspace-list{margin-top:48px}.workspace-list>.card{margin:16px 0}.offer-choice{display:flex;align-items:center;justify-content:space-between;gap:20px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 0;margin:18px 0}.offer-choice p{margin:4px 0 0}.workspace-list .action-row{margin-bottom:0}
+@media(max-width:760px){.marketplace-form{grid-template-columns:1fr}.marketplace-form .full-field{grid-column:auto}.offer-choice{align-items:flex-start;flex-direction:column}}
