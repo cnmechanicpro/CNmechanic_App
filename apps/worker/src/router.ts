@@ -1,21 +1,31 @@
-import { idSchema,profileUpdateSchema,vehicleCreateSchema,serviceRequestCreateSchema } from '@cnmechanic/schemas';
-import { platformInfo,IdentityService } from '@cnmechanic/domain';
+import { idSchema,profileUpdateSchema,vehicleCreateSchema,serviceRequestCreateSchema,mechanicSearchInputSchema,shopSearchInputSchema,serviceSearchInputSchema,slugSchema } from '@cnmechanic/schemas';
+import { platformInfo,IdentityService,ProviderSearchService } from '@cnmechanic/domain';
 import type { WorkerConfig } from '@cnmechanic/config';
 import { authenticate } from './auth';
 import { authorize } from './authorization';
-import { identityRepository,getOrganization,listVehicleMakes,listVehicleModels,listVehicles,getVehicle,createVehicle,listOwnerships,listCategories,listServices,listLocations,listOrganizationServices,createServiceRequest } from './repository';
+import { identityRepository,getOrganization,listVehicleMakes,listVehicleModels,listVehicles,getVehicle,createVehicle,listOwnerships,listCategories,listServices,listLocations,listOrganizationServices,createServiceRequest,searchMechanics,searchShops,searchPublicServices,getPublicMechanic,getPublicShop } from './repository';
 import { readJson } from './validation';
 import { AppError } from './errors';
 import { json } from './responses';
 import { openapi } from './openapi';
-export function routeName(path:string){if(/^\/api\/v1\/vehicles\/[^/]+\/ownerships$/.test(path))return '/api/v1/vehicles/:id/ownerships';if(/^\/api\/v1\/vehicles\/[^/]+$/.test(path))return '/api/v1/vehicles/:id';if(/^\/api\/v1\/organizations\/[^/]+\/(locations|services)$/.test(path))return path.endsWith('/locations')?'/api/v1/organizations/:id/locations':'/api/v1/organizations/:id/services';return /^\/api\/v1\/organizations\/[^/]+$/.test(path)?'/api/v1/organizations/:id':['/api/v1/health','/api/v1/version','/api/v1/me','/api/v1/vehicles','/api/v1/vehicle-makes','/api/v1/vehicle-models','/api/v1/service-categories','/api/v1/services','/api/v1/service-requests','/openapi.json','/mcp'].includes(path)?path:'unmatched';}
+
+const fixed=['/api/v1/health','/api/v1/version','/api/v1/me','/api/v1/vehicles','/api/v1/vehicle-makes','/api/v1/vehicle-models','/api/v1/service-categories','/api/v1/services','/api/v1/service-requests','/api/v1/search/mechanics','/api/v1/search/shops','/api/v1/search/services','/openapi.json','/mcp'];
+export function routeName(path:string){
+ if(/^\/api\/v1\/mechanics\/[^/]+$/.test(path))return '/api/v1/mechanics/:slug';
+ if(/^\/api\/v1\/shops\/[^/]+$/.test(path))return '/api/v1/shops/:slug';
+ if(/^\/api\/v1\/vehicles\/[^/]+\/ownerships$/.test(path))return '/api/v1/vehicles/:id/ownerships';
+ if(/^\/api\/v1\/vehicles\/[^/]+$/.test(path))return '/api/v1/vehicles/:id';
+ if(/^\/api\/v1\/organizations\/[^/]+\/(locations|services)$/.test(path))return path.endsWith('/locations')?'/api/v1/organizations/:id/locations':'/api/v1/organizations/:id/services';
+ return /^\/api\/v1\/organizations\/[^/]+$/.test(path)?'/api/v1/organizations/:id':fixed.includes(path)?path:'unmatched';
+}
+function queryInput(url:URL){const value:Record<string,unknown>=Object.fromEntries(url.searchParams.entries());for(const key of ['latitude','longitude','radiusMiles','limit','offset'])if(typeof value[key]==='string')value[key]=Number(value[key]);for(const key of ['mobile','verified'])if(value[key]==='true'||value[key]==='false')value[key]=value[key]==='true';return value;}
 export async function route(request:Request,config:WorkerConfig,requestId:string){
- const url=new URL(request.url),path=url.pathname;
- const name=routeName(path);
- if(name==='unmatched' || path==='/mcp')throw new AppError('NOT_FOUND',404,'Endpoint not found.');
+ const url=new URL(request.url),path=url.pathname,name=routeName(path);
+ if(name==='unmatched'||path==='/mcp')throw new AppError('NOT_FOUND',404,'Endpoint not found.');
  const methods=path==='/api/v1/me'?['GET','PATCH']:['/api/v1/vehicles','/api/v1/service-requests'].includes(path)?['GET','POST']:['GET'];
  if(!methods.includes(request.method))throw new AppError('METHOD_NOT_ALLOWED',405,'Method not allowed.');
- if(url.search)throw new AppError('VALIDATION_ERROR',400,'Query parameters are not supported.');
+ const queryRoutes=new Set(['/api/v1/search/mechanics','/api/v1/search/shops','/api/v1/search/services']);
+ if(url.search&&!queryRoutes.has(path))throw new AppError('VALIDATION_ERROR',400,'Query parameters are not supported.');
  if(path==='/api/v1/health')return json({status:'ok',service:'cnmechanic-api',environment:config.ENVIRONMENT},requestId);
  if(path==='/api/v1/version')return json(platformInfo(),requestId);
  if(path==='/openapi.json')return Response.json(openapi);
@@ -23,18 +33,19 @@ export async function route(request:Request,config:WorkerConfig,requestId:string
  if(path==='/api/v1/vehicle-models')return json(await listVehicleModels(config),requestId);
  if(path==='/api/v1/service-categories')return json(await listCategories(config),requestId);
  if(path==='/api/v1/services')return json(await listServices(config),requestId);
+ const searchService=new ProviderSearchService({searchMechanics:(input:Parameters<typeof searchMechanics>[1])=>searchMechanics(config,input),searchShops:(input:Parameters<typeof searchShops>[1])=>searchShops(config,input)});
+ if(path==='/api/v1/search/mechanics'){const parsed=mechanicSearchInputSchema.safeParse(queryInput(url));if(!parsed.success)throw new AppError('VALIDATION_ERROR',400,'Invalid mechanic search filters.');return json(await searchService.searchMechanics(parsed.data),requestId);}
+ if(path==='/api/v1/search/shops'){const parsed=shopSearchInputSchema.safeParse(queryInput(url));if(!parsed.success)throw new AppError('VALIDATION_ERROR',400,'Invalid shop search filters.');return json(await searchService.searchShops(parsed.data),requestId);}
+ if(path==='/api/v1/search/services'){const parsed=serviceSearchInputSchema.safeParse(queryInput(url));if(!parsed.success)throw new AppError('VALIDATION_ERROR',400,'Invalid service search filters.');return json(await searchPublicServices(config,parsed.data),requestId);}
+ if(name==='/api/v1/mechanics/:slug'||name==='/api/v1/shops/:slug'){const parsed=slugSchema.safeParse(path.split('/').at(-1));if(!parsed.success)throw new AppError('VALIDATION_ERROR',400,'Invalid public profile slug.');return json(name.includes('mechanics')?await getPublicMechanic(config,parsed.data):await getPublicShop(config,parsed.data),requestId);}
  const identity=await authenticate(request,config);
- if(path==='/api/v1/me'){
-  const service=new IdentityService(identityRepository(identity));
-  if(request.method==='PATCH'){const input=await readJson(request,profileUpdateSchema);return json(await service.updateProfile(input.displayName),requestId);}
-  return json(await service.getProfile(),requestId);
- }
+ if(path==='/api/v1/me'){const service=new IdentityService(identityRepository(identity));if(request.method==='PATCH'){const input=await readJson(request,profileUpdateSchema);return json(await service.updateProfile(input.displayName),requestId);}return json(await service.getProfile(),requestId);}
  if(path==='/api/v1/vehicles'){if(request.method==='POST')return json(await createVehicle(identity,await readJson(request,vehicleCreateSchema)),requestId,201);return json(await listVehicles(identity),requestId);}
  if(path==='/api/v1/service-requests'){if(request.method!=='POST')throw new AppError('METHOD_NOT_ALLOWED',405,'Method not allowed.');return json(await createServiceRequest(identity,await readJson(request,serviceRequestCreateSchema)),requestId,201);}
- const identifier=path.split('/').at(path.includes('/ownerships')?-2:-1);const parsed=idSchema.safeParse(identifier);if(!parsed.success)throw new AppError('VALIDATION_ERROR',400,'Invalid resource identifier.');
- if(routeName(path)==='/api/v1/vehicles/:id/ownerships')return json(await listOwnerships(identity,parsed.data),requestId);
- if(routeName(path)==='/api/v1/vehicles/:id')return json(await getVehicle(identity,parsed.data),requestId);
- if(routeName(path)==='/api/v1/organizations/:id/locations')return json(await listLocations(identity,parsed.data),requestId);
- if(routeName(path)==='/api/v1/organizations/:id/services')return json(await listOrganizationServices(identity,parsed.data),requestId);
+ const identifier=path.split('/').at(path.includes('/ownerships')?-2:-1),parsed=idSchema.safeParse(identifier);if(!parsed.success)throw new AppError('VALIDATION_ERROR',400,'Invalid resource identifier.');
+ if(name==='/api/v1/vehicles/:id/ownerships')return json(await listOwnerships(identity,parsed.data),requestId);
+ if(name==='/api/v1/vehicles/:id')return json(await getVehicle(identity,parsed.data),requestId);
+ if(name==='/api/v1/organizations/:id/locations')return json(await listLocations(identity,parsed.data),requestId);
+ if(name==='/api/v1/organizations/:id/services')return json(await listOrganizationServices(identity,parsed.data),requestId);
  const organization=await getOrganization(identity,parsed.data);authorize(organization.roles,'organization:read');return json(organization,requestId);
 }

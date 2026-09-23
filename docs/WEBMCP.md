@@ -1,9 +1,7 @@
-# WebMCP foundation
+# WebMCP discovery interface
 
-`packages/webmcp` isolates WebMCP from application code. It contains typed tool metadata, input/output schemas, a registry and a registration adapter. It supports the future risk taxonomy: `READ_SAFE`, `WRITE_LOW_RISK`, `WRITE_CONFIRMATION_REQUIRED`, `FINANCIAL_CONFIRMATION_REQUIRED` and `ADMIN_PROHIBITED_FOR_AGENTS`.
+`packages/webmcp` isolates optional browser-agent registration from application code. Phase 3 enables exactly five public tools: `search_mechanics`, `search_shops`, `get_mechanic_profile`, `get_shop_profile`, and `search_services`.
 
-Phase 1 enables only `get_platform_info`, a public read-only tool that calls the same typed API client and `/api/v1/version` domain behavior used by the web application. It returns real application/version status and no user or marketplace data.
+Every tool is `READ_SAFE`, classified `READ`, public, confirmation-free, schema-validated, bounded, rate-limited, and routed through the same typed API client, Worker endpoints, domain service, Supabase grants, and RLS used by the human search experience. No tool has a database client or mutation path.
 
-The adapter feature-detects `document.modelContext`, registers through a lifecycle `AbortSignal`, passes execution cancellation to the API client, and returns `unsupported` or `failed` without affecting the human UI. Tests cover registry validation, invocation, generated JSON Schema, unsupported browsers, throwing browser accessors, rejected registration and cancellation.
-
-No sensitive, authenticated, write or browser-agent confirmation flow exists. Before adding a future browser tool, define the user-visible path, shared domain use case, authorization, output trust, audit policy and human confirmation requirement.
+The adapter feature-detects `document.modelContext`, registers through a lifecycle `AbortSignal`, propagates cancellation, and returns `unsupported` or `failed` without affecting the website. Core search works when the experimental browser API is absent. See [WebMCP search](./WEBMCP_SEARCH.md) for schemas and security boundaries.
