@@ -6,6 +6,6 @@ CNMechanic is a two-sided marketplace:
 - **Certified mechanic:** builds an authoritative professional profile and becomes discoverable for qualified repair demand.
 - **Repair business:** provides shop identity, locations, offered services, and vehicle-make capabilities.
 
-Discovery is the Phase 3 entry point. It does not create bookings, dispatch work, accept jobs, mutate availability, collect payments, or change claims. Existing Phase 2 service requests remain customer-owned requests to a selected organization and use only `DRAFT`, `SUBMITTED`, `CANCELLED`, and `CLOSED`.
+Discovery remains the public Phase 3 entry point and does not mutate marketplace state. Phase 4 adds authenticated, customer-owned service requests, controlled eligibility and ranking, bounded job offers, mechanic response, customer confirmation, and exactly one authoritative assignment. The five public WebMCP discovery tools remain read-only and expose none of these transactional actions.
 
-Provider eligibility is separate from ranking. `ProviderEligibilityService` decides whether a professional is discoverable or job-eligible from authoritative status. `ProviderRankingService` can order only candidates already declared eligible. Future matching and dispatch must reuse the same eligibility boundary rather than create a parallel provider directory.
+Provider eligibility is separate from ranking. `ProviderEligibilityService` decides whether a professional is discoverable or job-eligible from authoritative status. Candidate generation filters service, vehicle-make, geography, and mobile/shop compatibility before `ProviderRankingService` orders the eligible set. Internal dispatch rechecks eligibility in PostgreSQL before it creates a bounded offer batch.

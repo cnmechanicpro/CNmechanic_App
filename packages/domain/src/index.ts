@@ -30,5 +30,16 @@ export interface RankedProvider {id:string;verified:boolean;relevance:number;dis
 export class ProviderRankingService {
  rank<T extends RankedProvider>(providers:T[]){return [...providers].sort((a,b)=>Number(b.verified)-Number(a.verified)||b.relevance-a.relevance||(a.distanceMiles??Number.MAX_SAFE_INTEGER)-(b.distanceMiles??Number.MAX_SAFE_INTEGER)||a.id.localeCompare(b.id));}
 }
+export interface MarketplaceCandidate extends ProviderEligibilityCandidate,RankedProvider {serviceMatch:boolean;vehicleMakeMatch:boolean;geographyMatch:boolean;mobileCapable:boolean;shopCapable:boolean;}
+export type ServiceMode='MOBILE'|'SHOP'|'EITHER';
+/** Candidate generation filters first. Ranking never receives an ineligible provider. */
+export class CandidateGenerationService {
+ constructor(private readonly eligibility=new ProviderEligibilityService(),private readonly ranking=new ProviderRankingService()){}
+ generate<T extends MarketplaceCandidate>(providers:T[],mode:ServiceMode,limit=10){
+  const bounded=Math.min(Math.max(limit,1),10);
+  const eligible=providers.filter(candidate=>this.eligibility.isJobEligible(candidate)&&candidate.serviceMatch&&candidate.vehicleMakeMatch&&candidate.geographyMatch&&(mode!=='MOBILE'||candidate.mobileCapable)&&(mode!=='SHOP'||candidate.shopCapable));
+  return this.ranking.rank(eligible).slice(0,bounded);
+ }
+}
 export interface ProviderSearchRepository<TMechanic,TShop,TMechanicInput,TShopInput>{searchMechanics(input:TMechanicInput):Promise<TMechanic>;searchShops(input:TShopInput):Promise<TShop>;}
 export class ProviderSearchService<TMechanic,TShop,TMechanicInput,TShopInput>{constructor(private readonly repository:ProviderSearchRepository<TMechanic,TShop,TMechanicInput,TShopInput>){}searchMechanics(input:TMechanicInput){return this.repository.searchMechanics(input);}searchShops(input:TShopInput){return this.repository.searchShops(input);}}
