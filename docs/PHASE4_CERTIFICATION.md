@@ -78,4 +78,4 @@ GitHub CI is verification-only. Cloudflare Git integrations currently publish `m
 
 - Certified implementation commit: `0234103dd3e3a396b3f39be4ab131b0e812beec4`.
 - Pull request: [#10](https://github.com/cnmechanicpro/CNmechanic_App/pull/10).
-- The first two `verify` attempts completed application lint, types, tests, and build, then failed before Docker database startup because anonymous GHCR image pulls were rate-limited. The branch now authenticates those read-only pulls with the workflow's short-lived `GITHUB_TOKEN`; the final rerun result is recorded in the PR checks.
+- The initial `verify` attempts completed application lint, types, tests, and build, then failed before Docker database startup because GHCR image pulls were rate-limited. Read-only GHCR authentication succeeded but did not change the registry response, so it was removed. CI now uses Supabase CLI's documented `supabase start -x` support to start only PostgreSQL, the sole service required by `db reset` and the pgTAP suite; the database gate itself remains unchanged. The final rerun result is recorded in the PR checks.
