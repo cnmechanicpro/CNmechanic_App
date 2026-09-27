@@ -1,6 +1,6 @@
 # Phase 4 certification
 
-Status: locally certified for review on `codex/phase4-job-marketplace`; GitHub PR and CI evidence are recorded after push.
+Status: certified with a release-control limitation on `codex/phase4-job-marketplace`. PR #10 is open and unmerged. No Phase 4 production migration or deployment has been performed.
 
 ## Certification answer
 
@@ -72,10 +72,23 @@ No Phase 4 production/domain defect remains open. No service-role credential is 
 
 ## Release control
 
-GitHub CI is verification-only. Cloudflare Git integrations currently publish `main`; production auto-deploy settings must be changed manually before merge as documented in `PHASE4_AUDIT.md`. Keep preview builds enabled, move production publication to an explicitly advanced release branch or disable production auto-deploy, and retain separate approval steps for database migration, Worker deployment, and Pages deployment. This branch changes no external production setting.
+GitHub CI is verification-only. A read-only Cloudflare dashboard audit on 2026-09-27 confirmed that both Git integrations still make a merge to `main` a production release:
+
+- Pages project `cnmechanic-web`, **Settings > Build > Branch control**: production branch is `main`; **Enable automatic production branch deployments** is on; preview branch policy is **All non-Production branches**.
+- Worker `cnmechanic-api`, **Settings > Builds**: production branch is `main`; the deploy command is `npx wrangler deploy --config apps/worker/wrangler.jsonc --env production --keep-vars`. A push to this branch automatically triggers a build, and `wrangler deploy` promotes it to the active deployment.
+
+The smallest supported release-control correction requires two dashboard changes and explicit approval before they are saved:
+
+1. In Pages **Settings > Build > Branch control**, turn off **Enable automatic production branch deployments**. Leave **All non-Production branches** selected so PR/branch previews continue.
+2. In Worker **Settings > Builds > Build configuration**, replace the production deploy command with `npx wrangler versions upload --config apps/worker/wrangler.jsonc --env production --keep-vars`. This keeps production-branch builds and uploads an inspectable Worker version without promoting it to the active deployment; the active Worker changes only through a separate deployment action.
+
+No dashboard setting was changed during certification. PR #10 must not be merged until the release-control change is separately approved and applied. The Supabase migration, Worker version promotion, and Pages production upload remain separate release approvals.
 
 ## GitHub evidence
 
 - Certified implementation commit: `0234103dd3e3a396b3f39be4ab131b0e812beec4`.
+- Certified code and CI head before this evidence-only documentation update: `1ed85b3ca6f0610b6130f41898aba2a1e546c9a1`.
 - Pull request: [#10](https://github.com/cnmechanicpro/CNmechanic_App/pull/10).
-- The initial `verify` attempts completed application lint, types, tests, and build, then failed before Docker database startup because GHCR image pulls were rate-limited. Read-only GHCR authentication succeeded but did not change the registry response, so it was removed. CI now uses Supabase CLI's documented `supabase start -x` support to start only PostgreSQL, the sole service required by `db reset` and the pgTAP suite; the database gate itself remains unchanged. The final rerun result is recorded in the PR checks.
+- GitHub CI run [36328673989](https://github.com/cnmechanicpro/CNmechanic_App/actions/runs/36328673989), job `verify` (`108646270032`): PASS at `1ed85b3ca6f0610b6130f41898aba2a1e546c9a1`. `npm ci`, lint, typecheck, the 73-test application suite, build, Worker types, database-only `supabase start`, `supabase db reset --local --no-seed`, and `supabase test db supabase/tests --local` all passed. The CLI pgTAP command reports 1 file and 9 assertions; the broader migration/RLS behavioral suite reports 1 file and 26 tests and is included in the 73-test application gate.
+- Cloudflare Pages branch preview: PASS for deployment `e2e2a338-64a0-44df-8fda-128d94508585`. Supabase Preview was skipped, as expected; the Phase 4 production migration was not applied.
+- The initial `verify` attempts completed application lint, types, tests, and build, then failed before Docker database startup because GHCR image pulls were rate-limited. Read-only GHCR authentication succeeded but did not change the registry response, so it was removed. CI now uses Supabase CLI's documented `supabase start -x` support to exclude services that are not required by `db reset` or the pgTAP suite; the database gate itself remains unchanged. The first run with that supported correction passed end to end.
