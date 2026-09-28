@@ -2,7 +2,7 @@
 
 The Pages application in `apps/web` builds static files from React/Vite. The Worker in `apps/worker` is a separately deployable API. Pages never contains privileged business rules.
 
-`apps/worker/wrangler.jsonc` declares isolated local, preview and production environments. The Worker uses a recent compatibility date, Node compatibility and Cloudflare observability. It has no database binding and contains no secret. `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are required secrets/variables for preview and production, added with Cloudflare’s secret mechanism before deployment. The service role is never a Worker or browser configuration value.
+`apps/worker/wrangler.jsonc` declares isolated local, preview and production environments. The Worker uses a recent compatibility date, Node compatibility and Cloudflare observability. Public discovery and authenticated marketplace actions have separate Cloudflare rate-limit bindings. The Worker has no database binding and contains no secret. `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are required secrets/variables for preview and production, added with Cloudflare’s secret mechanism before deployment. The service role is never a Worker or browser configuration value; controlled matching and activation remain narrowly granted database operations for an internal service-role runner.
 
 The intended route is `api.cnmechanic.com`; Pages serves `www.cnmechanic.com`. DNS, custom domains, apex redirect and deployment credentials are not configured by this phase. Before a production deployment, explicitly configure the Pages custom domain, Worker custom domain, `cnmechanic.com` to `www.cnmechanic.com` redirect, preview origins, Cloudflare WAF/rate limits and secrets.
 

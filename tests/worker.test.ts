@@ -41,4 +41,14 @@ describe('Worker request pipeline',()=>{
  });
  it('rejects unbounded or unknown public search inputs before database access',async()=>{const remote=vi.spyOn(globalThis,'fetch');expect((await worker.fetch(req('/api/v1/search/mechanics?limit=500'),env)).status).toBe(400);expect((await worker.fetch(req('/api/v1/search/shops?private=true'),env)).status).toBe(400);expect(remote).not.toHaveBeenCalled();});
  it('enforces the Cloudflare search limiter when the binding is present',async()=>{const limited={...env,SEARCH_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:false})}} as unknown as Env;const response=await worker.fetch(req('/api/v1/search/services'),limited);expect(response.status).toBe(429);expect(await response.json()).toMatchObject({error:{code:'RATE_LIMITED'}});});
+ it('enforces the separate Cloudflare marketplace limiter before authenticated work',async()=>{
+  const limit=vi.fn().mockResolvedValue({success:false});
+  const remote=vi.spyOn(globalThis,'fetch');
+  const limited={...env,MARKETPLACE_RATE_LIMITER:{limit}} as unknown as Env;
+  const response=await worker.fetch(req('/api/v1/service-requests',{headers:auth}),limited);
+  expect(response.status).toBe(429);
+  expect(await response.json()).toMatchObject({error:{code:'RATE_LIMITED'}});
+  expect(limit).toHaveBeenCalledWith({key:'unknown:/api/v1/service-requests'});
+  expect(remote).not.toHaveBeenCalled();
+ });
 });

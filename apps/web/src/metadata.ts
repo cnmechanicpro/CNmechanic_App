@@ -7,6 +7,7 @@ const staticPages:Record<string,{title:string;description:string;private?:boolea
  '/mechanics':{title:'Find a mechanic',description:'Search verified public CNMechanic mechanic profiles by service, vehicle make, expertise, and location.'},
  '/for-mechanics':{title:'Built for automotive professionals',description:'Join the trusted network built to help automotive professionals get discovered, build trust, and keep customers coming back.'},
  '/auth':{title:'Sign in',description:'Private CNMechanic account access.',private:true},'/account':{title:'Account',description:'Private CNMechanic account settings.',private:true},'/vehicles':{title:'Vehicles',description:'Private CNMechanic vehicle records.',private:true},
+ '/service-requests':{title:'Service requests',description:'Create and manage private CNMechanic vehicle service requests.',private:true},'/mechanic/jobs':{title:'Mechanic jobs',description:'Private CNMechanic job opportunities and assignments.',private:true},
 };
 const notFound=():RouteMetadata=>({mode:'set',metadata:{title:'Page not found | CNMechanic',description:'The requested CNMechanic page was not found.',robots:'noindex, nofollow'}});
 export function resolveRouteMetadata(pathname:string,hasQuery=false):RouteMetadata{

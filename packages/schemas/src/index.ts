@@ -21,8 +21,17 @@ export const ownershipSchema=z.object({id:idSchema,vehicleId:idSchema,ownershipS
 export const serviceCategorySchema=z.object({id:idSchema,name:z.string(),slug:z.string(),description:z.string().nullable()});
 export const serviceSchema=z.object({id:idSchema,categoryId:idSchema,name:z.string(),slug:z.string(),description:z.string().nullable()});
 export const locationSchema=z.object({id:idSchema,organizationId:idSchema,name:z.string(),slug:z.string(),locationType:z.enum(['STOREFRONT','MOBILE','SERVICE_AREA']),status:z.string(),city:z.string().nullable(),region:z.string().nullable(),countryCode:z.string(),timezone:z.string()});
-export const serviceRequestSchema=z.object({id:idSchema,vehicleId:idSchema,organizationId:idSchema,locationId:idSchema.nullable(),serviceId:idSchema,status:z.enum(['DRAFT','SUBMITTED','CANCELLED','CLOSED']),customerNote:z.string().nullable(),createdAt:timestampSchema,updatedAt:timestampSchema});
-export const serviceRequestCreateSchema=z.strictObject({vehicleId:idSchema,organizationId:idSchema,locationId:idSchema.optional(),serviceId:idSchema,customerNote:z.string().trim().max(2000).optional()});
+export const serviceRequestStatusSchema=z.enum(['DRAFT','SUBMITTED','MATCHING','OFFERS_SENT','MECHANIC_RESPONDED','PENDING_CUSTOMER_CONFIRMATION','ASSIGNED','ACTIVE','CANCELLED','NO_MATCH','EXPIRED','REJECTED','CLOSED']);
+export const serviceRequestSchema=z.object({id:idSchema,vehicleId:idSchema,organizationId:idSchema.nullable(),locationId:idSchema.nullable(),serviceId:idSchema,status:serviceRequestStatusSchema,customerNote:z.string().nullable(),serviceLocationText:z.string().nullable(),city:z.string().nullable(),region:z.string().nullable(),postalCode:z.string().nullable(),countryCode:z.string().length(2),mobileServicePreference:z.enum(['MOBILE','SHOP','EITHER']),preferredStartAt:timestampSchema.nullable(),preferredEndAt:timestampSchema.nullable(),urgency:z.enum(['ROUTINE','SOON','URGENT']),assignedMechanicId:idSchema.nullable(),createdAt:timestampSchema,updatedAt:timestampSchema});
+export const serviceRequestCreateSchema=z.strictObject({vehicleId:idSchema,serviceId:idSchema,organizationId:idSchema.optional(),locationId:idSchema.optional(),customerNote:z.string().trim().max(2000).optional(),serviceLocationText:z.string().trim().max(300).optional(),city:z.string().trim().max(100).optional(),region:z.string().trim().max(100).optional(),postalCode:z.string().trim().max(20).optional(),countryCode:z.string().length(2).regex(/^[A-Z]{2}$/).default('US'),latitude:z.number().min(-90).max(90).optional(),longitude:z.number().min(-180).max(180).optional(),mobileServicePreference:z.enum(['MOBILE','SHOP','EITHER']).default('EITHER'),preferredStartAt:timestampSchema.optional(),preferredEndAt:timestampSchema.optional(),urgency:z.enum(['ROUTINE','SOON','URGENT']).default('ROUTINE'),submit:z.boolean().default(true),idempotencyKey:z.string().trim().min(8).max(100)}).superRefine((value,ctx)=>{if((value.latitude===undefined)!=(value.longitude===undefined))ctx.addIssue({code:'custom',message:'latitude and longitude must be provided together'});if(value.locationId&&!value.organizationId)ctx.addIssue({code:'custom',message:'organizationId is required with locationId'});if(value.preferredStartAt&&value.preferredEndAt&&value.preferredEndAt<=value.preferredStartAt)ctx.addIssue({code:'custom',message:'preferredEndAt must be after preferredStartAt'});});
+export const jobOfferStatusSchema=z.enum(['OFFERED','VIEWED','ACCEPTED','DECLINED','EXPIRED','WITHDRAWN']);
+export const mechanicSummarySchema=z.object({id:idSchema,slug:z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),publicName:z.string(),headline:z.string().nullable(),verified:z.literal(true)});
+export const jobOfferSchema=z.object({id:idSchema,serviceRequestId:idSchema,status:jobOfferStatusSchema,offeredAt:timestampSchema,expiresAt:timestampSchema,respondedAt:timestampSchema.nullable(),declineReason:z.string().nullable(),mechanic:mechanicSummarySchema.optional()});
+export const jobOfferResponseSchema=z.strictObject({accept:z.boolean(),declineReason:z.string().trim().min(1).max(500).optional()}).superRefine((v,ctx)=>{if(!v.accept&&!v.declineReason)ctx.addIssue({code:'custom',message:'declineReason is required when declining'});});
+export const assignmentSchema=z.object({id:idSchema,serviceRequestId:idSchema,jobOfferId:idSchema,mechanicId:idSchema,status:z.enum(['ASSIGNED','ACTIVE','CANCELLED','CLOSED']),assignedAt:timestampSchema,activatedAt:timestampSchema.nullable(),mechanic:mechanicSummarySchema.optional()});
+export const cancellationSchema=z.strictObject({reason:z.string().trim().min(1).max(500).optional()});
+export const requestPageSchema=z.strictObject({items:z.array(serviceRequestSchema),page:z.object({limit:z.number().int(),offset:z.number().int(),hasMore:z.boolean()})});
+export const offerPageSchema=z.strictObject({items:z.array(jobOfferSchema),page:z.object({limit:z.number().int(),offset:z.number().int(),hasMore:z.boolean()})});
 export const paginationSchema = z.strictObject({limit:z.coerce.number().int().min(1).max(100).default(20),cursor:idSchema.optional()});
 export const emptyInputSchema = z.strictObject({});
 export const slugSchema = z.string().trim().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
@@ -44,6 +53,9 @@ export type Profile = z.infer<typeof profileSchema>;
 export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type Vehicle = z.infer<typeof vehicleSchema>;
+export type ServiceRequest = z.infer<typeof serviceRequestSchema>;
+export type JobOffer = z.infer<typeof jobOfferSchema>;
+export type Assignment = z.infer<typeof assignmentSchema>;
 export const contracts = {
  health:{method:'GET',path:'/api/v1/health',auth:false,response:healthSchema},
  version:{method:'GET',path:'/api/v1/version',auth:false,response:versionSchema},
@@ -60,7 +72,15 @@ export const contracts = {
  services:{method:'GET',path:'/api/v1/services',auth:false,response:z.array(serviceSchema)},
  organizationLocations:{method:'GET',path:'/api/v1/organizations/{id}/locations',auth:true,response:z.array(locationSchema)},
  organizationServices:{method:'GET',path:'/api/v1/organizations/{id}/services',auth:true,response:z.array(serviceSchema)},
- createServiceRequest:{method:'POST',path:'/api/v1/service-requests',auth:true,input:serviceRequestCreateSchema,response:serviceRequestSchema},
+	 createServiceRequest:{method:'POST',path:'/api/v1/service-requests',auth:true,input:serviceRequestCreateSchema,response:serviceRequestSchema},
+	 serviceRequests:{method:'GET',path:'/api/v1/service-requests',auth:true,response:requestPageSchema},
+	 serviceRequest:{method:'GET',path:'/api/v1/service-requests/{id}',auth:true,response:serviceRequestSchema},
+	 cancelServiceRequest:{method:'POST',path:'/api/v1/service-requests/{id}/cancel',auth:true,input:cancellationSchema,response:serviceRequestSchema},
+	 requestOffers:{method:'GET',path:'/api/v1/service-requests/{id}/offers',auth:true,response:z.array(jobOfferSchema)},
+	 confirmJobOffer:{method:'POST',path:'/api/v1/job-offers/{id}/confirm',auth:true,response:assignmentSchema},
+	 jobOpportunities:{method:'GET',path:'/api/v1/mechanic/job-opportunities',auth:true,response:offerPageSchema},
+	 assignedJobs:{method:'GET',path:'/api/v1/mechanic/jobs',auth:true,response:z.array(assignmentSchema)},
+	 respondJobOffer:{method:'POST',path:'/api/v1/mechanic/job-offers/{id}/respond',auth:true,input:jobOfferResponseSchema,response:jobOfferSchema},
  searchMechanics:{method:'GET',path:'/api/v1/search/mechanics',auth:false,input:mechanicSearchInputSchema,response:mechanicSearchResultSchema},
  searchShops:{method:'GET',path:'/api/v1/search/shops',auth:false,input:shopSearchInputSchema,response:shopSearchResultSchema},
  searchServices:{method:'GET',path:'/api/v1/search/services',auth:false,input:serviceSearchInputSchema,response:serviceSearchResultSchema},
