@@ -1,6 +1,6 @@
 # Phase 4 certification
 
-Status: certified with a release-control limitation on `codex/phase4-job-marketplace`. PR #10 is open and unmerged. No Phase 4 production migration or deployment has been performed.
+Status: certified and ready for final merge review on `codex/phase4-job-marketplace`. PR #10 is open and unmerged. No Phase 4 production migration or deployment has been performed.
 
 ## Certification answer
 
@@ -72,23 +72,25 @@ No Phase 4 production/domain defect remains open. No service-role credential is 
 
 ## Release control
 
-GitHub CI is verification-only. A read-only Cloudflare dashboard audit on 2026-09-27 confirmed that both Git integrations still make a merge to `main` a production release:
+GitHub CI is verification-only. On 2026-09-28, the approved Cloudflare release controls were saved and read back from the authenticated dashboard:
 
-- Pages project `cnmechanic-web`, **Settings > Build > Branch control**: production branch is `main`; **Enable automatic production branch deployments** is on; preview branch policy is **All non-Production branches**.
-- Worker `cnmechanic-api`, **Settings > Builds**: production branch is `main`; the deploy command is `npx wrangler deploy --config apps/worker/wrangler.jsonc --env production --keep-vars`. A push to this branch automatically triggers a build, and `wrangler deploy` promotes it to the active deployment.
+- Pages project `cnmechanic-web`, **Settings > Build > Branch control**: production branch remains `main`; **Enable automatic production branch deployments** is off; preview branch policy remains **All non-Production branches**.
+- Worker `cnmechanic-api`, **Settings > Builds**: production branch remains `main`; the persisted deploy command is `npx wrangler versions upload --config apps/worker/wrangler.jsonc --env production --keep-vars`. Production-branch builds can upload an inspectable Worker version, but a separate deployment action is required to promote it to active traffic.
 
-The smallest supported release-control correction requires two dashboard changes and explicit approval before they are saved:
+The controls changed release behavior only. They did not publish application code:
 
-1. In Pages **Settings > Build > Branch control**, turn off **Enable automatic production branch deployments**. Leave **All non-Production branches** selected so PR/branch previews continue.
-2. In Worker **Settings > Builds > Build configuration**, replace the production deploy command with `npx wrangler versions upload --config apps/worker/wrangler.jsonc --env production --keep-vars`. This keeps production-branch builds and uploads an inspectable Worker version without promoting it to the active deployment; the active Worker changes only through a separate deployment action.
+- The active Pages production deployment remains `a7075a2a-e067-419f-9b87-9fcd80778f0d` from `main` commit `54b476e15863e69fe48e9492fbda8cc484b75ad2`.
+- The active Worker remains version `f532ee52` at 100% traffic, from the same pre-Phase-4 `main` commit.
+- The Phase 4 branch preview remains available, confirming non-production previews are still enabled.
+- The Phase 4 Supabase migration remains unapplied.
 
-No dashboard setting was changed during certification. PR #10 must not be merged until the release-control change is separately approved and applied. The Supabase migration, Worker version promotion, and Pages production upload remain separate release approvals.
+Merging PR #10 will therefore update source control and may upload an inactive Worker version, but it will not deploy Pages production, promote Worker traffic, or apply the database migration. Those three production operations remain separately approved release steps.
 
 ## GitHub evidence
 
 - Certified implementation commit: `0234103dd3e3a396b3f39be4ab131b0e812beec4`.
-- Certified code and CI head before this evidence-only documentation update: `1ed85b3ca6f0610b6130f41898aba2a1e546c9a1`.
+- Certified code and CI head before this release-control evidence update: `1015b8b0e38b5039a900c30670a8784b1bfb36a0`.
 - Pull request: [#10](https://github.com/cnmechanicpro/CNmechanic_App/pull/10).
-- GitHub CI run [36328673989](https://github.com/cnmechanicpro/CNmechanic_App/actions/runs/36328673989), job `verify` (`108646270032`): PASS at `1ed85b3ca6f0610b6130f41898aba2a1e546c9a1`. `npm ci`, lint, typecheck, the 73-test application suite, build, Worker types, database-only `supabase start`, `supabase db reset --local --no-seed`, and `supabase test db supabase/tests --local` all passed. The CLI pgTAP command reports 1 file and 9 assertions; the broader migration/RLS behavioral suite reports 1 file and 26 tests and is included in the 73-test application gate.
-- Cloudflare Pages branch preview: PASS for deployment `e2e2a338-64a0-44df-8fda-128d94508585`. Supabase Preview was skipped, as expected; the Phase 4 production migration was not applied.
+- GitHub CI run [36329078347](https://github.com/cnmechanicpro/CNmechanic_App/actions/runs/36329078347), job `verify`: PASS at `1015b8b0e38b5039a900c30670a8784b1bfb36a0`. `npm ci`, lint, typecheck, the 73-test application suite, build, Worker types, database-only `supabase start`, `supabase db reset --local --no-seed`, and `supabase test db supabase/tests --local` all passed. The CLI pgTAP command reports 1 file and 9 assertions; the broader migration/RLS behavioral suite reports 1 file and 26 tests and is included in the 73-test application gate.
+- Cloudflare Pages branch preview: PASS for deployment `4052d24c-4718-4ac9-910a-f2b971d5daec`. Supabase Preview was skipped, as expected; the Phase 4 production migration was not applied.
 - The initial `verify` attempts completed application lint, types, tests, and build, then failed before Docker database startup because GHCR image pulls were rate-limited. Read-only GHCR authentication succeeded but did not change the registry response, so it was removed. CI now uses Supabase CLI's documented `supabase start -x` support to exclude services that are not required by `db reset` or the pgTAP suite; the database gate itself remains unchanged. The first run with that supported correction passed end to end.

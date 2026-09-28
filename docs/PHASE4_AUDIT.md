@@ -1,7 +1,7 @@
 # Phase 4 audit
 
-Date: 2026-09-23  
-Branch: `codex/phase4-job-marketplace`  
+Date: 2026-09-23
+Branch: `codex/phase4-job-marketplace`
 Audited base: `54b476e15863e69fe48e9492fbda8cc484b75ad2`
 
 ## Existing foundation
